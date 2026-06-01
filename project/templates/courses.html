@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 style="font-size: 28px; margin-bottom: 24px;">📚 课程管理</h1>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <div>
+        <p style="color: var(--text-muted);">管理您的课程和关联班级</p>
+    </div>
+    <a href="/courses/add" class="btn btn-primary">
+        ➕ 添加课程
+    </a>
+</div>
+
+{% if courses %}
+<div class="card-grid">
+    {% for course in courses %}
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+            <div>
+                <h3 style="font-size: 20px; margin-bottom: 4px;">{{ course.name }}</h3>
+                {% if course.code %}
+                <span class="badge badge-info">{{ course.code }}</span>
+                {% endif %}
+            </div>
+            <div class="dropdown">
+                <button class="dropdown-btn">⋮</button>
+                <div class="dropdown-content">
+                    <a href="/courses/edit/{{ course.id }}">✏️ 编辑</a>
+                    <a href="/courses/assign/{{ course.id }}">🔗 关联班级</a>
+                    <a href="#" onclick="event.preventDefault(); if(confirm('确定删除该课程吗？')){var f=document.createElement('form');f.method='POST';f.action='/courses/delete/{{ course.id }}';document.body.appendChild(f);f.submit();}">🗑️ 删除</a>
+                </div>
+            </div>
+        </div>
+        
+        {% if course.description %}
+        <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 12px;">{{ course.description }}</p>
+        {% endif %}
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px solid var(--border-color);">
+            <span style="color: var(--text-muted); font-size: 13px;">{{ course.classes|length }} 个班级</span>
+            <span style="color: var(--text-muted); font-size: 13px;">创建于 {{ course.created_at.strftime('%Y-%m-%d') }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <div style="font-size: 64px; margin-bottom: 16px;">📚</div>
+    <h3 style="font-size: 20px; margin-bottom: 8px;">暂无课程</h3>
+    <p style="color: var(--text-muted);">点击上方按钮添加您的第一个课程</p>
+    <a href="/courses/add" class="btn btn-primary" style="margin-top: 24px;">
+        ➕ 添加课程
+    </a>
+</div>
+{% endif %}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const dropdownButtons = document.querySelectorAll('.dropdown-btn');
+        
+        dropdownButtons.forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const dropdownContent = this.nextElementSibling;
+                
+                document.querySelectorAll('.dropdown-content').forEach(content => {
+                    if (content !== dropdownContent) {
+                        content.classList.remove('show');
+                    }
+                });
+                
+                dropdownContent.classList.toggle('show');
+            });
+        });
+        
+        document.addEventListener('click', function(e) {
+            document.querySelectorAll('.dropdown-content').forEach(content => {
+                if (!content.contains(e.target) && !e.target.classList.contains('dropdown-btn')) {
+                    content.classList.remove('show');
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

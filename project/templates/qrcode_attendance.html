@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二维码签到 - 明眸智签</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #050510;
+            min-height: 100vh;
+            color: #f8f8fc;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 10px;
+            color: #f8f8fc;
+            letter-spacing: -0.5px;
+        }
+
+        .header p {
+            color: rgba(248, 248, 252, 0.7);
+            font-size: 16px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: rgba(0, 255, 136, 0.06);
+            border: 1px solid rgba(0, 255, 136, 0.12);
+            padding: 30px;
+        }
+
+        .card-title {
+            font-size: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title span {
+            font-size: 24px;
+        }
+
+        .qrcode-section {
+            text-align: center;
+        }
+
+        #qrcode {
+            width: 300px;
+            height: 300px;
+            margin: 0 auto 20px;
+            background: white;
+            padding: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .course-info {
+            background: rgba(0, 255, 136, 0.06);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .course-info .label {
+            color: #8892b0;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .course-info .value {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .course-info select {
+            position: relative;
+            z-index: 10;
+            appearance: none;
+            cursor: pointer;
+        }
+
+        .course-info select option {
+            background: #1a1a2e;
+            color: white;
+            padding: 10px;
+        }
+
+        .qrcode-tips {
+            background: rgba(0, 212, 255, 0.1);
+            border-left: 4px solid #00d4ff;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .qrcode-tips h4 {
+            margin-bottom: 10px;
+            color: #00d4ff;
+        }
+
+        .qrcode-tips ul {
+            list-style: none;
+            color: #8892b0;
+            font-size: 14px;
+        }
+
+        .qrcode-tips li {
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .qrcode-tips li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #00ff88;
+            text-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .stat-card {
+            background: rgba(0, 255, 136, 0.06);
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: 900;
+            color: #f8f8fc;
+            letter-spacing: -1px;
+            font-family: 'JetBrains Mono', monospace;
+            text-shadow: 0 0 12px rgba(0, 255, 136, 0.3);
+        }
+
+        .stat-card .label {
+            color: #8892b0;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .student-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .student-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: rgba(0, 255, 136, 0.06);
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .student-item:hover {
+            background: rgba(0, 255, 136, 0.12);
+        }
+
+        .student-item.checked-in {
+            background: rgba(0, 255, 136, 0.1);
+            border-left: 4px solid #00ff88;
+        }
+
+        .student-name {
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .student-id {
+            color: #8892b0;
+            font-size: 13px;
+            margin-top: 3px;
+        }
+
+        .status-badge {
+            padding: 5px 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-badge.present {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+            text-shadow: 0 0 6px rgba(0, 255, 136, 0.4);
+        }
+
+        .status-badge.absent {
+            background: rgba(255, 99, 71, 0.2);
+            color: #ff6347;
+        }
+
+        .refresh-btn, .clear-btn {
+            width: 100%;
+            padding: 12px 24px;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .refresh-btn {
+            background: #00ff88;
+            color: #050510;
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.3);
+        }
+
+        .clear-btn {
+            background: rgba(255, 99, 71, 0.2);
+            color: #ff6347;
+            border: 1px solid rgba(255, 99, 71, 0.3);
+        }
+
+        .clear-btn:hover {
+            background: rgba(255, 99, 71, 0.3);
+        }
+
+        .warning-box {
+            background: rgba(255, 193, 7, 0.1);
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-top: 20px;
+            color: #ffc107;
+            font-size: 14px;
+        }
+
+        .success-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            animation: popupScale 0.4s ease forwards;
+        }
+
+        .success-popup.success {
+            border-color: rgba(0, 255, 136, 0.3);
+        }
+
+        .success-popup.error {
+            border-color: rgba(255, 99, 71, 0.3);
+        }
+
+        @keyframes popupScale {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+
+        .success-popup .icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+        }
+
+        .success-popup.success .icon {
+            color: #00ff88;
+        }
+
+        .success-popup.error .icon {
+            color: #ff6347;
+        }
+
+        .success-popup .message {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .success-popup.success .message {
+            color: #00ff88;
+        }
+
+        .success-popup.error .message {
+            color: #ff6347;
+        }
+
+        .success-popup .sub-message {
+            color: #8892b0;
+            font-size: 14px;
+        }
+
+        .fade-out {
+            animation: fadeOut 0.3s ease forwards;
+        }
+
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            to { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+        }
+
+        .pending-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            background: rgba(255, 200, 0, 0.1);
+            border: 1px solid rgba(255, 200, 0, 0.3);
+        }
+
+        .pending-info {
+            flex: 1;
+        }
+
+        .pending-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #ffc800;
+            margin-bottom: 6px;
+        }
+
+        .pending-id {
+            font-size: 14px;
+            color: #8892b0;
+        }
+
+        .pending-time {
+            font-size: 12px;
+            color: #5c677d;
+            margin-top: 4px;
+        }
+
+        .pending-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-confirm {
+            padding: 10px 16px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #10b981;
+            color: white;
+            transition: all 0.3s ease;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .btn-confirm:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        .btn-reject {
+            padding: 10px 16px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #ef4444;
+            color: white;
+            transition: all 0.3s ease;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .btn-reject:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 二维码签到</h1>
+            <p>学生扫码完成签到，作为人脸识别的备用方案</p>
+        </div>
+
+        <div class="main-content">
+            <div class="card">
+                <div class="card-title">
+                <span>📊</span>
+                <span>签到二维码</span>
+            </div>
+
+                <div class="course-info">
+                    <div class="label">选择课程</div>
+                    <select id="courseSelect" onchange="changeCourse()" style="width: 100%; padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: white; font-size: 16px;">
+                        <option value="">请选择课程</option>
+                    </select>
+                </div>
+
+                <div class="course-info">
+                    <div class="label">签到时间</div>
+                    <div class="value" id="signTime">-</div>
+                </div>
+
+                <div class="qrcode-section">
+                    <div id="qrcode">
+                        <img id="qrcodeImage" src="" alt="签到二维码" style="width: 280px; height: 280px;" />
+                    </div>
+                    <p style="color: #8892b0; font-size: 14px;">刷新二维码: <span id="qrTime">-</span></p>
+                </div>
+
+                <div class="qrcode-tips">
+                    <h4>📌 学生操作指南</h4>
+                    <ul>
+                        <li>打开微信或手机浏览器</li>
+                        <li>使用扫一扫功能</li>
+                        <li>扫描上方二维码</li>
+                        <li>输入学号完成签到</li>
+                    </ul>
+                </div>
+
+                <div class="warning-box">
+                    ⚠️ 二维码每10秒自动刷新，学生签到需教师确认后生效
+                </div>
+
+                <div id="pendingSection" style="margin-top: 24px; display: none;">
+                    <div class="card-title">
+                        <span>⏳</span>
+                        <span>待确认签到请求</span>
+                    </div>
+                    <div id="pendingList" style="display: grid; gap: 12px;"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <span>👥</span>
+                    <span>签到状态</span>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="value" id="totalStudents">0</div>
+                        <div class="label">应到人数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="value" id="checkedInCount">0</div>
+                        <div class="label">已签到</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="value" id="absentCount">0</div>
+                        <div class="label">未签到</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="value" id="attendanceRate">0%</div>
+                        <div class="label">签到率</div>
+                    </div>
+                </div>
+
+                <button class="refresh-btn" onclick="refreshStudentList()">🔄 刷新签到状态</button>
+                <button class="clear-btn" onclick="clearTodayAttendance()">🗑️ 清除今日签到</button>
+
+                <div class="student-list" id="studentList">
+                    <p style="text-align: center; color: #8892b0;">请选择课程开始签到</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="successPopup" class="success-popup" style="display: none;">
+        <div class="icon">✅</div>
+        <div class="message">签到成功</div>
+        <div class="sub-message">学生已成功签到</div>
+    </div>
+
+    <script>
+        let currentCourseId = null;
+        let qrToken = null;
+
+        async function loadCourses() {
+            try {
+                const response = await fetch('/api/get_courses');
+                const data = await response.json();
+                
+                const courseSelect = document.getElementById('courseSelect');
+                courseSelect.innerHTML = '<option value="">请选择课程</option>';
+                
+                if (data.success && data.courses.length > 0) {
+                    data.courses.forEach(course => {
+                        const option = document.createElement('option');
+                        option.value = course.id;
+                        option.textContent = course.name;
+                        courseSelect.appendChild(option);
+                    });
+                    
+                    currentCourseId = data.courses[0].id;
+                    courseSelect.value = data.courses[0].id;
+                    updateSignTime();
+                    generateQRCode();
+                    loadStudentList();
+                }
+            } catch (error) {
+                console.error('加载课程失败:', error);
+            }
+        }
+
+        function changeCourse() {
+            const courseSelect = document.getElementById('courseSelect');
+            const courseId = parseInt(courseSelect.value);
+            
+            if (courseId && courseId !== currentCourseId) {
+                currentCourseId = courseId;
+                updateSignTime();
+                generateQRCode();
+                loadStudentList();
+            }
+        }
+
+        function updateSignTime() {
+            const now = new Date();
+            document.getElementById('signTime').textContent = now.toLocaleString('zh-CN');
+        }
+
+        async function generateQRCode() {
+            const now = Date.now();
+            qrToken = `${currentCourseId}_${now}_${Math.random().toString(36).substr(2, 9)}`;
+            
+            const qrcodeImage = document.getElementById('qrcodeImage');
+            qrcodeImage.src = `/api/get_qrcode/${qrToken}?t=${now}`;
+            
+            document.getElementById('qrTime').textContent = new Date().toLocaleTimeString('zh-CN');
+        }
+
+        async function loadStudentList() {
+            if (!currentCourseId) return;
+            
+            try {
+                const response = await fetch(`/api/get_course_info/${currentCourseId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const students = data.students || [];
+                    const today = new Date().toISOString().split('T')[0];
+                    
+                    const studentList = document.getElementById('studentList');
+                    studentList.innerHTML = '';
+                    
+                    let checkedInCount = 0;
+                    
+                    students.forEach(student => {
+                        const isCheckedIn = student.checked_in;
+                        if (isCheckedIn) checkedInCount++;
+                        
+                        const item = document.createElement('div');
+                        item.className = `student-item ${isCheckedIn ? 'checked-in' : ''}`;
+                        item.innerHTML = `
+                            <div>
+                                <div class="student-name">${student.name}</div>
+                                <div class="student-id">学号: ${student.student_id}</div>
+                            </div>
+                            <span class="status-badge ${isCheckedIn ? 'present' : 'absent'}">
+                                ${isCheckedIn ? '✓ 已签到' : '○ 未签到'}
+                            </span>
+                        `;
+                        studentList.appendChild(item);
+                    });
+                    
+                    document.getElementById('totalStudents').textContent = students.length;
+                    document.getElementById('checkedInCount').textContent = checkedInCount;
+                    document.getElementById('absentCount').textContent = students.length - checkedInCount;
+                    document.getElementById('attendanceRate').textContent = students.length > 0 
+                        ? Math.round((checkedInCount / students.length) * 100) + '%' 
+                        : '0%';
+                }
+            } catch (error) {
+                console.error('加载学生列表失败:', error);
+            }
+        }
+
+        async function loadPendingAttendances() {
+            if (!currentCourseId) {
+                document.getElementById('pendingSection').style.display = 'none';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/get_pending_attendances/${currentCourseId}`);
+                const data = await response.json();
+                
+                if (data.success && data.pending && data.pending.length > 0) {
+                    document.getElementById('pendingSection').style.display = 'block';
+                    const pendingList = document.getElementById('pendingList');
+                    pendingList.innerHTML = '';
+                    
+                    data.pending.forEach(pending => {
+                        const requestTime = new Date(pending.request_time);
+                        const timeStr = requestTime.toLocaleTimeString('zh-CN');
+                        
+                        const item = document.createElement('div');
+                        item.className = 'pending-item';
+                        item.innerHTML = `
+                            <div class="pending-info">
+                                <div class="pending-name">${pending.name}</div>
+                                <div class="pending-id">学号: ${pending.student_id}</div>
+                                <div class="pending-time">请求时间: ${timeStr}</div>
+                            </div>
+                            <div class="pending-buttons">
+                                <button class="btn-confirm" onclick="confirmAttendance(${pending.id})">✓ 确认</button>
+                                <button class="btn-reject" onclick="rejectAttendance(${pending.id})">✗ 拒绝</button>
+                            </div>
+                        `;
+                        pendingList.appendChild(item);
+                    });
+                } else {
+                    document.getElementById('pendingSection').style.display = 'none';
+                }
+            } catch (error) {
+                console.error('加载待确认签到失败:', error);
+            }
+        }
+
+        async function confirmAttendance(pendingId) {
+            try {
+                const response = await fetch(`/api/confirm_attendance/${pendingId}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showSuccessPopup('确认签到成功', true);
+                    loadPendingAttendances();
+                    loadStudentList();
+                } else {
+                    showSuccessPopup(data.message || '确认失败', false);
+                }
+            } catch (error) {
+                console.error('确认签到失败:', error);
+                showSuccessPopup('确认失败', false);
+            }
+        }
+
+        async function rejectAttendance(pendingId) {
+            try {
+                const response = await fetch(`/api/reject_attendance/${pendingId}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showSuccessPopup('已拒绝该签到请求', true);
+                    loadPendingAttendances();
+                } else {
+                    showSuccessPopup(data.message || '操作失败', false);
+                }
+            } catch (error) {
+                console.error('拒绝签到失败:', error);
+                showSuccessPopup('操作失败', false);
+            }
+        }
+
+        function refreshStudentList() {
+            loadStudentList();
+        }
+
+        async function clearTodayAttendance() {
+    if (!currentCourseId) return;
+    
+    if (!confirm('确定要清除今日该课程的所有签到记录吗？')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/clear_today_attendance_by_course/${currentCourseId}`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showSuccessPopup('签到记录已清除', true);
+            loadStudentList();
+        } else {
+            showSuccessPopup(data.message || '清除失败', false);
+        }
+    } catch (error) {
+        console.error('清除签到失败:', error);
+        showSuccessPopup('清除失败', false);
+    }
+}
+
+        function showSuccessPopup(message, isSuccess) {
+            const popup = document.getElementById('successPopup');
+            popup.className = `success-popup ${isSuccess ? 'success' : 'error'}`;
+            popup.querySelector('.icon').textContent = isSuccess ? '✅' : '❌';
+            popup.querySelector('.message').textContent = message;
+            popup.querySelector('.sub-message').textContent = isSuccess ? '操作成功' : '请重试';
+            popup.style.display = 'block';
+            popup.classList.remove('fade-out');
+            
+            setTimeout(() => {
+                popup.classList.add('fade-out');
+                setTimeout(() => {
+                    popup.style.display = 'none';
+                }, 300);
+            }, 2000);
+        }
+
+        setInterval(() => {
+            generateQRCode();
+            updateSignTime();
+        }, 10000);
+
+        setInterval(() => {
+            if (currentCourseId) {
+                loadStudentList();
+                loadPendingAttendances();
+            }
+        }, 5000);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCourses();
+        });
+    </script>
+</body>
+</html>

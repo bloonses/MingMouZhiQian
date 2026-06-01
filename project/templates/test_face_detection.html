@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人脸检测测试 - 明眸智签</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        h1 {
+            color: white;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .test-container {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        video {
+            width: 100%;
+            display: block;
+            transform: scaleX(-1);
+        }
+        
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 500;
+        }
+        
+        .status.loading {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status.ready {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status.detecting {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .debug-log {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+        
+        .debug-log div {
+            margin-bottom: 5px;
+            padding: 3px 0;
+        }
+        
+        .debug-log .error {
+            color: #f87171;
+        }
+        
+        .debug-log .success {
+            color: #4ade80;
+        }
+        
+        .debug-log .info {
+            color: #94a3b8;
+        }
+        
+        .params {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .param {
+            background: #f3f4f6;
+            padding: 12px;
+            border-radius: 8px;
+        }
+        
+        .param label {
+            display: block;
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+        
+        .param input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 14px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: #2563eb;
+        }
+        
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .btn-danger:hover:not(:disabled) {
+            background: #dc2626;
+        }
+        
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        
+        .instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f9ff;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .instructions h3 {
+            color: #1e40af;
+            margin-bottom: 10px;
+        }
+        
+        .instructions ul {
+            color: #1e3a8a;
+            margin-left: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 人脸检测测试工具</h1>
+    
+    <div class="test-container">
+        <div class="status loading" id="status">⏳ 正在加载模型...</div>
+        
+        <div class="video-wrapper">
+            <video id="video" autoplay playsinline muted></video>
+            <canvas id="canvas"></canvas>
+        </div>
+        
+        <div class="debug-log" id="debugLog">
+            <div class="info">系统准备中...</div>
+        </div>
+        
+        <div class="params">
+            <div class="param">
+                <label>输入尺寸 (inputSize)</label>
+                <input type="number" id="inputSize" value="320" min="128" max="1024" step="64">
+            </div>
+            <div class="param">
+                <label>检测阈值 (scoreThreshold)</label>
+                <input type="number" id="scoreThreshold" value="0.3" min="0.1" max="1.0" step="0.1">
+            </div>
+        </div>
+        
+        <div class="btn-group">
+            <button class="btn-primary" id="startBtn" disabled>📹 打开摄像头</button>
+            <button class="btn-success" id="detectBtn" disabled>🔍 开始检测</button>
+            <button class="btn-danger" id="stopBtn" disabled>⏹️ 停止检测</button>
+        </div>
+        
+        <div class="instructions">
+            <h3>💡 测试说明</h3>
+            <ul>
+                <li>请确保在光线充足的环境中进行测试</li>
+                <li>脸部正对摄像头，距离约30-50厘米</li>
+                <li>可以调整输入尺寸和检测阈值来优化检测效果</li>
+                <li>绿色框表示检测到人脸，蓝色点表示面部特征点</li>
+                <li>如果检测不到人脸，尝试降低检测阈值或增大输入尺寸</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script src="/static/face-api.js"></script>
+    <script>
+        const MODEL_URL = '/static/models';
+        let stream = null;
+        let detectionInterval = null;
+        let modelsLoaded = false;
+        
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        const statusEl = document.getElementById('status');
+        const debugLog = document.getElementById('debugLog');
+        const startBtn = document.getElementById('startBtn');
+        const detectBtn = document.getElementById('detectBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        
+        function log(message, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = type;
+            div.textContent = `[${time}] ${message}`;
+            debugLog.appendChild(div);
+            debugLog.scrollTop = debugLog.scrollHeight;
+            
+            while (debugLog.children.length > 50) {
+                debugLog.removeChild(debugLog.firstChild);
+            }
+        }
+        
+        function setStatus(message, type = 'loading') {
+            statusEl.textContent = message;
+            statusEl.className = 'status ' + type;
+        }
+        
+        async function loadModels() {
+            try {
+                log('加载 tinyFaceDetector...');
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                log('✓ tinyFaceDetector 加载成功', 'success');
+                
+                log('加载 faceLandmark68Net...');
+                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+                log('✓ faceLandmark68Net 加载成功', 'success');
+                
+                log('加载 faceRecognitionNet...');
+                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+                log('✓ faceRecognitionNet 加载成功', 'success');
+                
+                modelsLoaded = true;
+                setStatus('✅ 模型加载完成，点击"打开摄像头"', 'ready');
+                startBtn.disabled = false;
+                log('所有模型加载完成!', 'success');
+            } catch (error) {
+                log('模型加载失败: ' + error.message, 'error');
+                setStatus('❌ 模型加载失败', 'error');
+            }
+        }
+        
+        async function startCamera() {
+            if (!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') && typeof navigator.getUserMedia !== 'function') {
+                log('浏览器不支持 getUserMedia 或当前为非安全上下文（需 HTTPS 或 localhost）', 'error');
+                setStatus('❌ 浏览器不支持摄像头（请使用 HTTPS/localhost）', 'error');
+                return;
+            }
+
+            try {
+                log('请求摄像头权限...');
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'user'
+                    }
+                });
+                
+                video.srcObject = stream;
+                
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        video.play().then(resolve);
+                    };
+                });
+                
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                log('摄像头已打开: ' + video.videoWidth + 'x' + video.videoHeight, 'success');
+                setStatus('📹 摄像头已就绪，点击"开始检测"', 'ready');
+                
+                startBtn.disabled = true;
+                detectBtn.disabled = false;
+                stopBtn.disabled = false;
+            } catch (error) {
+                log('摄像头打开失败: ' + error.message, 'error');
+                setStatus('❌ 摄像头打开失败', 'error');
+            }
+        }
+        
+        async function startDetection() {
+            if (!modelsLoaded || !stream) {
+                log('模型或摄像头未就绪', 'error');
+                return;
+            }
+            
+            setStatus('🔍 正在检测人脸...', 'detecting');
+            detectBtn.disabled = true;
+            stopBtn.disabled = false;
+            
+            detectionInterval = setInterval(detectFace, 500);
+        }
+        
+        function stopDetection() {
+            if (detectionInterval) {
+                clearInterval(detectionInterval);
+                detectionInterval = null;
+            }
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            setStatus('⏸️ 检测已停止', 'ready');
+            detectBtn.disabled = false;
+            stopBtn.disabled = true;
+        }
+        
+        async function detectFace() {
+            if (video.paused || video.ended) return;
+            
+            const minDimension = Math.min(video.videoWidth, video.videoHeight);
+            if (minDimension < 100) {
+                log('视频尺寸太小', 'info');
+                return;
+            }
+            
+            try {
+                const inputSize = parseInt(document.getElementById('inputSize').value);
+                const scoreThreshold = parseFloat(document.getElementById('scoreThreshold').value);
+                
+                const options = new faceapi.TinyFaceDetectorOptions({
+                    inputSize: inputSize,
+                    scoreThreshold: scoreThreshold
+                });
+                
+                const detections = await faceapi.detectAllFaces(video, options)
+                    .withFaceLandmarks(true);
+                
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                if (detections.length > 0) {
+                    const resizedDetections = faceapi.resizeResults(detections, {
+                        width: canvas.width,
+                        height: canvas.height
+                    });
+                    
+                    faceapi.draw.drawDetections(canvas, resizedDetections);
+                    faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
+                    
+                    setStatus(`✅ 检测到 ${detections.length} 张人脸`, 'success');
+                    log('检测到 ' + detections.length + ' 张人脸', 'success');
+                } else {
+                    setStatus('🔍 未检测到人脸，调整位置或参数', 'detecting');
+                }
+            } catch (error) {
+                log('检测错误: ' + error.message, 'error');
+            }
+        }
+        
+        startBtn.addEventListener('click', startCamera);
+        detectBtn.addEventListener('click', startDetection);
+        stopBtn.addEventListener('click', stopDetection);
+        
+        loadModels();
+    </script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 style="font-size: 28px; margin-bottom: 24px;">📝 签到记录</h1>
+
+<div class="card">
+    <div style="display: flex; gap: 16px; margin-bottom: 16px;">
+        <div style="flex: 1;">
+            <label>选择班级</label>
+            <select id="classSelect">
+                <option value="">全部班级</option>
+                {% for cls in classes %}
+                <option value="{{ cls.id }}">{{ cls.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>选择日期</label>
+            <input type="date" id="dateInput" value="{{ today }}">
+        </div>
+        <div style="display: flex; align-items: flex-end; gap: 8px;">
+            <button id="searchBtn" class="btn btn-primary">查询</button>
+            <a href="/api/export_statistics" class="btn btn-success">📊 导出统计</a>
+        </div>
+    </div>
+    
+    <table id="recordsTable">
+        <thead>
+            <tr>
+                <th>学生姓名</th>
+                <th>学号</th>
+                <th>班级</th>
+                <th>签到时间</th>
+                <th>状态</th>
+                <th>签到方式</th>
+            </tr>
+        </thead>
+        <tbody id="recordsBody"></tbody>
+    </table>
+</div>
+
+<script>
+function loadRecords() {
+    const classId = document.getElementById('classSelect').value;
+    const date = document.getElementById('dateInput').value;
+    
+    fetch('/api/get_records', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ class_id: classId || null, date: date })
+    })
+    .then(response => response.json())
+    .then(records => {
+        const body = document.getElementById('recordsBody');
+        if (records.length === 0) {
+            body.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">暂无记录</td></tr>';
+            return;
+        }
+        body.innerHTML = records.map(r => `
+            <tr>
+                <td>${r.student_name}</td>
+                <td>${r.student_id}</td>
+                <td>${r.class_name}</td>
+                <td>${r.check_in_time}</td>
+                <td><span class="badge badge-success">${r.status === 'present' ? '已签到' : r.status}</span></td>
+                <td>${r.method === 'face' ? '人脸识别' : '手动签到'}</td>
+            </tr>
+        `).join('');
+    });
+}
+
+document.getElementById('searchBtn').addEventListener('click', loadRecords);
+loadRecords();
+</script>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 style="font-size: 28px; margin-bottom: 24px;">📊 仪表板</h1>
+
+<div class="stats">
+    <div class="stat-card">
+        <div class="value">{{ class_count }}</div>
+        <div class="label">班级数量</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ student_count }}</div>
+        <div class="label">学生总数</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ today_attendance }}</div>
+        <div class="label">今日签到</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ attendance_rate }}%</div>
+        <div class="label">今日出勤率</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>今日签到情况</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>班级</th>
+                <th>应到人数</th>
+                <th>已签到</th>
+                <th>出勤率</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for stat in class_stats %}
+            <tr>
+                <td>{{ stat.name }}</td>
+                <td>{{ stat.total }}</td>
+                <td>{{ stat.attended }}</td>
+                <td>{{ stat.rate }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>快速操作</h2>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+        <a href="/attendance" class="btn btn-primary" style="text-decoration: none; text-align: center;">
+            🎯 开始签到
+        </a>
+        <a href="/students" class="btn btn-secondary" style="text-decoration: none; text-align: center;">
+            👥 添加学生
+        </a>
+        <a href="/classes" class="btn btn-secondary" style="text-decoration: none; text-align: center;">
+            🏫 管理班级
+        </a>
+        <a href="/records" class="btn btn-secondary" style="text-decoration: none; text-align: center;">
+            📝 查看记录
+        </a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 style="font-size: 28px; margin-bottom: 24px;">👥 学生管理</h1>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <div style="display: flex; gap: 12px; align-items: center;">
+        <p>管理学生信息和人脸数据</p>
+        <div>
+            <label>筛选班级：</label>
+            <select id="classFilter" onchange="filterStudents()" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+                <option value="">全部班级</option>
+                {% for cls in classes %}
+                <option value="{{ cls.id }}" {% if selected_class and selected_class.id == cls.id %}selected{% endif %}>{{ cls.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <div style="display: flex; gap: 12px;">
+        <a href="/students/add" class="btn btn-primary">添加学生</a>
+        <button onclick="document.getElementById('importFile').click()" class="btn btn-success">📥 导入Excel</button>
+        <button onclick="exportStudents()" class="btn btn-secondary">📤 导出Excel</button>
+    </div>
+</div>
+
+<input type="file" id="importFile" accept=".xlsx" style="display: none;" onchange="importStudents()">
+
+<div id="importStatus" style="display: none; margin-bottom: 16px; padding: 12px; border-radius: 8px;"></div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>姓名</th>
+                <th>学号</th>
+                <th>班级</th>
+                <th>人脸状态</th>
+                <th>创建时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student in students %}
+            {% set cls = classes|selectattr('id', 'equalto', student.class_id)|first %}
+            <tr>
+                <td>{{ student.name }}</td>
+                <td>{{ student.student_id }}</td>
+                <td>{{ cls.name if cls else '未知' }}</td>
+                <td>
+                    {% if student.face_descriptor %}
+                    <span class="badge badge-success">已采集</span>
+                    {% else %}
+                    <span class="badge badge-warning">未采集</span>
+                    {% endif %}
+                </td>
+                <td>{{ student.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>
+                    <a href="/capture/{{ student.id }}" class="btn btn-success" style="padding: 6px 12px; font-size: 12px; margin-bottom: 4px; display: block;">采集人脸</a>
+                    <a href="/students/edit/{{ student.id }}" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px; margin-bottom: 4px; display: block;">编辑</a>
+                    <a href="#" onclick="event.preventDefault(); if(confirm('确定删除该学生吗？')){var f=document.createElement('form');f.method='POST';f.action='/students/delete/{{ student.id }}';document.body.appendChild(f);f.submit();}" class="btn btn-danger" style="padding: 6px 12px; font-size: 12px; display: block;">删除</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card" style="margin-top: 24px;">
+    <h3 style="margin-bottom: 16px;">📋 Excel导入格式说明</h3>
+    <p style="margin-bottom: 12px;">请按以下格式准备Excel文件（第一行为表头）：</p>
+    <table style="font-size: 14px;">
+        <thead>
+            <tr>
+                <th>A列</th>
+                <th>B列</th>
+                <th>C列</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>ID（可选）</td>
+                <td>学生姓名（必填）</td>
+                <td>学号（必填）</td>
+            </tr>
+        </tbody>
+    </table>
+    <p style="margin-top: 12px; color: #6b7280; font-size: 14px;">注意：导入前请先选择班级，学生将导入到当前选中的班级</p>
+</div>
+
+<script>
+function filterStudents() {
+    const classId = document.getElementById('classFilter').value;
+    if (classId) {
+        window.location.href = '/students?class_id=' + classId;
+    } else {
+        window.location.href = '/students';
+    }
+}
+
+function exportStudents() {
+    const classId = document.getElementById('classFilter').value || 0;
+    window.location.href = '/api/export_students/' + classId;
+}
+
+function importStudents() {
+    const fileInput = document.getElementById('importFile');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        return;
+    }
+    
+    const classId = document.getElementById('classFilter').value;
+    if (!classId) {
+        alert('请先选择班级');
+        fileInput.value = '';
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('class_id', classId);
+    
+    const statusDiv = document.getElementById('importStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.style.backgroundColor = '#dbeafe';
+    statusDiv.style.color = '#1e40af';
+    statusDiv.innerHTML = '正在导入...';
+    
+    fetch('/api/import_students', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusDiv.style.backgroundColor = '#dcfce7';
+            statusDiv.style.color = '#166534';
+            statusDiv.innerHTML = '✅ ' + data.message;
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            statusDiv.style.backgroundColor = '#fee2e2';
+            statusDiv.style.color = '#991b1b';
+            statusDiv.innerHTML = '❌ ' + data.message;
+        }
+    })
+    .catch(error => {
+        statusDiv.style.backgroundColor = '#fee2e2';
+        statusDiv.style.color = '#991b1b';
+        statusDiv.innerHTML = '❌ 导入失败: ' + error.message;
+    });
+    
+    fileInput.value = '';
+}
+</script>
+{% endblock %}

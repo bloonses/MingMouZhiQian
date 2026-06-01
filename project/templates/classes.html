@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 style="font-size: 28px; margin-bottom: 24px;">🏫 班级管理</h1>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    <p>管理班级信息</p>
+    <div style="display: flex; gap: 12px;">
+        <a href="/classes/add" class="btn btn-primary">添加班级</a>
+        <button onclick="document.getElementById('importFile').click()" class="btn btn-success">📥 导入Excel</button>
+        <a href="/api/export_classes" class="btn btn-secondary">📤 导出Excel</a>
+    </div>
+</div>
+
+<input type="file" id="importFile" accept=".xlsx" style="display: none;" onchange="importClasses()">
+
+<div id="importStatus" style="display: none; margin-bottom: 16px; padding: 12px; border-radius: 8px;"></div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>班级名称</th>
+                <th>年级</th>
+                <th>描述</th>
+                <th>创建时间</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cls in classes %}
+            <tr>
+                <td>{{ cls.name }}</td>
+                <td>{{ cls.grade or '-' }}</td>
+                <td>{{ cls.description or '-' }}</td>
+                <td>{{ cls.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>
+                    <a href="/classes/edit/{{ cls.id }}" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">编辑</a>
+                    <a href="#" onclick="event.preventDefault(); if(confirm('确定删除该班级吗？')){var f=document.createElement('form');f.method='POST';f.action='/classes/delete/{{ cls.id }}';document.body.appendChild(f);f.submit();}" class="btn btn-danger" style="padding: 6px 12px; font-size: 12px;">删除</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card" style="margin-top: 24px;">
+    <h3 style="margin-bottom: 16px;">📋 Excel导入格式说明</h3>
+    <p style="margin-bottom: 12px;">请按以下格式准备Excel文件（第一行为表头）：</p>
+    <table style="font-size: 14px;">
+        <thead>
+            <tr>
+                <th>A列</th>
+                <th>B列</th>
+                <th>C列</th>
+                <th>D列</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>ID（可选）</td>
+                <td>班级名称（必填）</td>
+                <td>年级</td>
+                <td>描述</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+function importClasses() {
+    const fileInput = document.getElementById('importFile');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const statusDiv = document.getElementById('importStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.style.backgroundColor = '#dbeafe';
+    statusDiv.style.color = '#1e40af';
+    statusDiv.innerHTML = '正在导入...';
+    
+    fetch('/api/import_classes', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusDiv.style.backgroundColor = '#dcfce7';
+            statusDiv.style.color = '#166534';
+            statusDiv.innerHTML = '✅ ' + data.message;
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            statusDiv.style.backgroundColor = '#fee2e2';
+            statusDiv.style.color = '#991b1b';
+            statusDiv.innerHTML = '❌ ' + data.message;
+        }
+    })
+    .catch(error => {
+        statusDiv.style.backgroundColor = '#fee2e2';
+        statusDiv.style.color = '#991b1b';
+        statusDiv.innerHTML = '❌ 导入失败: ' + error.message;
+    });
+    
+    fileInput.value = '';
+}
+</script>
+{% endblock %}

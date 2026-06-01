@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 style="font-size: 28px; margin-bottom: 24px;">📷 采集人脸 - {{ student.name }}</h1>
+
+<div class="card" style="max-width: 700px;">
+    <div style="margin-bottom: 16px;">
+        <p>学生：{{ student.name }} ({{ student.student_id }})</p>
+        <p>班级：{{ cls.name if cls else '未分配' }}</p>
+    </div>
+    
+    <div class="video-container" style="position: relative; background: #000;">
+        <video id="video" width="100%" autoplay playsinline muted style="transform: scaleX(-1); display: block;"></video>
+        <canvas id="canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; transform: scaleX(-1);"></canvas>
+    </div>
+    
+    <div class="status-bar">
+        <span id="status">正在初始化摄像头...</span>
+    </div>
+    
+    <div id="debugInfo" style="margin-bottom: 16px; padding: 12px; background: #1e293b; color: #e2e8f0; border-radius: 8px; font-size: 12px; max-height: 200px; overflow-y: auto; font-family: monospace; display: none;">
+        <strong style="color: #60a5fa;">调试信息:</strong>
+        <div id="debugContent"></div>
+    </div>
+    
+    <div style="display: flex; gap: 12px;">
+        <button id="captureBtn" class="btn btn-primary" style="flex: 1;" disabled>
+            📷 采集人脸
+        </button>
+        <a href="/students" class="btn btn-secondary">返回</a>
+    </div>
+    
+    <div id="result" style="margin-top: 16px; padding: 12px; border-radius: 8px; display: none;"></div>
+</div>
+
+<script src="/static/face-api.js"></script>
+<script>
+const MODEL_URL = '/static/models';
+let video = null;
+let videoReady = false;
+let detectionCount = 0;
+let detectionInterval = null;
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+function showDebug(message, type = 'info') {
+    const contentDiv = document.getElementById('debugContent');
+    const time = new Date().toLocaleTimeString();
+    const color = type === 'error' ? '#f87171' : type === 'success' ? '#4ade80' : '#94a3b8';
+    contentDiv.innerHTML += `<div style="color: ${color};">[${time}] ${message}</div>`;
+    document.getElementById('debugInfo').scrollTop = document.getElementById('debugInfo').scrollHeight;
+    console.log(message);
+}
+
+async function loadModels() {
+    try {
+        showDebug('加载 tinyFaceDetector...', 'info');
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        showDebug('✓ tinyFaceDetector 加载成功', 'success');
+        
+        showDebug('加载 faceLandmark68Net...', 'info');
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+        showDebug('✓ faceLandmark68Net 加载成功', 'success');
+        
+        showDebug('加载 faceRecognitionNet...', 'info');
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+        showDebug('✓ faceRecognitionNet 加载成功', 'success');
+        
+        showDebug('所有模型加载完成!', 'success');
+        document.getElementById('status').textContent = '✓ 模型加载完成，请将面部对准摄像头';
+        document.getElementById('captureBtn').disabled = false;
+        
+        startDetection();
+    } catch (error) {
+        showDebug('模型加载失败: ' + error.message, 'error');
+        document.getElementById('status').textContent = '✗ 模型加载失败';
+    }
+}
+
+function startDetection() {
+    detectionInterval = setInterval(async () => {
+        if (!videoReady || !video) {
+            return;
+        }
+        
+        detectionCount++;
+        
+        try {
+            const options = new faceapi.TinyFaceDetectorOptions({
+                inputSize: 320,
+                scoreThreshold: 0.3
+            });
+            
+            const detections = await faceapi.detectAllFaces(video, options)
+                .withFaceLandmarks();
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const status = document.getElementById('status');
+            if (detections.length > 0) {
+                const displaySize = { width: canvas.width, height: canvas.height };
+                const resizedDetections = faceapi.resizeResults(detections, displaySize);
+                
+                faceapi.draw.drawDetections(canvas, resizedDetections);
+                faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
+                
+                status.textContent = '✓ 检测到人脸，可以采集 (' + detections.length + '张)';
+                status.style.color = '#10b981';
+                
+                if (detectionCount % 20 === 0) {
+                    showDebug('✓ 检测到 ' + detections.length + ' 张人脸', 'success');
+                }
+            } else {
+                if (detectionCount % 20 === 0) {
+                    status.textContent = '未检测到人脸，请靠近摄像头或调整角度';
+                    status.style.color = '#6b7280';
+                    showDebug('未检测到人脸', 'info');
+                }
+            }
+        } catch (error) {
+            if (detectionCount % 20 === 0) {
+                showDebug('检测错误: ' + error.message, 'error');
+            }
+        }
+    }, 500);
+}
+
+document.getElementById('captureBtn').addEventListener('click', async () => {
+    if (!videoReady || !video) {
+        showDebug('错误: 视频未准备就绪', 'error');
+        return;
+    }
+    
+    try {
+        document.getElementById('status').textContent = '正在采集人脸...';
+        showDebug('开始人脸检测...', 'info');
+        
+        const options = new faceapi.TinyFaceDetectorOptions({
+            inputSize: 320,
+            scoreThreshold: 0.3
+        });
+        
+        const detections = await faceapi.detectAllFaces(video, options)
+            .withFaceLandmarks()
+            .withFaceDescriptors();
+        
+        showDebug('检测到 ' + detections.length + ' 个人脸', 'info');
+        
+        if (detections.length === 0) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.background = '#fee2e2';
+            resultDiv.style.color = '#991b1b';
+            resultDiv.textContent = '❌ 未检测到人脸';
+            resultDiv.style.display = 'block';
+            showDebug('错误: 未检测到人脸', 'error');
+            return;
+        }
+        
+        showDebug('提取人脸特征 (128维)...', 'info');
+        const descriptor = Array.from(detections[0].descriptor);
+        showDebug('128维特征维度: ' + descriptor.length, 'success');
+        
+        const offscreen = document.createElement('canvas');
+        offscreen.width = video.videoWidth || 640;
+        offscreen.height = video.videoHeight || 480;
+        const offCtx = offscreen.getContext('2d');
+        offCtx.drawImage(video, 0, 0);
+        const faceImage = offscreen.toDataURL('image/jpeg', 0.85);
+        showDebug('人脸图片已捕获', 'info');
+        
+        showDebug('发送数据到服务器（含双维度特征）...', 'info');
+        const response = await fetch('/api/save_face', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                student_id: {{ student.id }},
+                descriptor: descriptor,
+                image: faceImage
+            })
+        });
+        
+        const result = await response.json();
+        const resultDiv = document.getElementById('result');
+        
+        if (result.success) {
+            resultDiv.style.background = '#dcfce7';
+            resultDiv.style.color = '#166534';
+            resultDiv.textContent = '✅ ' + result.message;
+            document.getElementById('status').textContent = '✓ 人脸采集成功';
+            showDebug('✓ 人脸采集成功!', 'success');
+        } else {
+            resultDiv.style.background = '#fee2e2';
+            resultDiv.style.color = '#991b1b';
+            resultDiv.textContent = '❌ ' + result.message;
+            showDebug('错误: ' + result.message, 'error');
+        }
+        resultDiv.style.display = 'block';
+    } catch (error) {
+        const resultDiv = document.getElementById('result');
+        resultDiv.style.background = '#fee2e2';
+        resultDiv.style.color = '#991b1b';
+        resultDiv.textContent = '❌ 采集失败: ' + error.message;
+        resultDiv.style.display = 'block';
+        showDebug('错误: ' + error.message, 'error');
+    }
+});
+
+showDebug('请求摄像头权限...', 'info');
+showDebug('请查看浏览器顶部是否有权限请求弹窗', 'info');
+
+let timeoutId = setTimeout(() => {
+    showDebug('摄像头权限请求超时，请检查：', 'error');
+    showDebug('1. 是否有弹窗被拦截', 'info');
+    showDebug('2. 摄像头是否被其他应用占用', 'info');
+    showDebug('3. 浏览器摄像头权限是否已允许', 'info');
+}, 10000);
+
+function getUserMediaPromise(constraints) {
+    if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+        return navigator.mediaDevices.getUserMedia(constraints);
+    } else if (typeof navigator.getUserMedia === 'function') {
+        return new Promise((resolve, reject) => navigator.getUserMedia(constraints, resolve, reject));
+    } else {
+        return Promise.reject(new Error('浏览器不支持 getUserMedia（可能为非安全上下文，需 HTTPS 或 localhost）'));
+    }
+}
+
+getUserMediaPromise({ video: { width: 640, height: 480, facingMode: 'user' } })
+    .then(stream => {
+        clearTimeout(timeoutId);
+        
+        const videoElement = document.getElementById('video');
+        videoElement.srcObject = stream;
+        showDebug('摄像头权限已获取', 'success');
+        
+        videoElement.onloadedmetadata = () => {
+            canvas.width = videoElement.videoWidth || 640;
+            canvas.height = videoElement.videoHeight || 480;
+            
+            showDebug('视频元数据加载完成: ' + videoElement.videoWidth + 'x' + videoElement.videoHeight, 'info');
+            
+            videoElement.play()
+                .then(() => {
+                    showDebug('视频开始播放', 'success');
+                    video = videoElement;
+                    videoReady = true;
+                    document.getElementById('status').textContent = '✓ 摄像头就绪，正在加载模型...';
+                    loadModels();
+                })
+                .catch(err => {
+                    showDebug('视频播放失败: ' + err.message, 'error');
+                });
+        };
+        
+        videoElement.onerror = () => {
+            showDebug('视频加载错误', 'error');
+        };
+        
+        setTimeout(() => {
+            if (!videoReady) {
+                showDebug('等待视频加载超时，强制设置就绪状态', 'info');
+                video = videoElement;
+                videoReady = true;
+                document.getElementById('status').textContent = '✓ 摄像头就绪，正在加载模型...';
+                loadModels();
+            }
+        }, 5000);
+    })
+    .catch(err => {
+        clearTimeout(timeoutId);
+        document.getElementById('status').textContent = '无法打开摄像头: ' + err.message;
+        showDebug('摄像头错误: ' + err.message, 'error');
+        showDebug('请检查摄像头是否连接正常，并授予浏览器访问权限；若为远程访问请使用 HTTPS 或在本机使用 localhost', 'error');
+    });
+</script>
+{% endblock %}

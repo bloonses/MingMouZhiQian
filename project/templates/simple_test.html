@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简单测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .container {
+            background: #f0f0f0;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        video, canvas {
+            max-width: 100%;
+            border: 1px solid #ccc;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 10px;
+            cursor: pointer;
+        }
+        #log {
+            background: #333;
+            color: #fff;
+            padding: 10px;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .error { color: #ff6b6b; }
+        .success { color: #4ecdc4; }
+        .info { color: #fff; }
+    </style>
+</head>
+<body>
+    <h1>简单人脸检测测试</h1>
+    
+    <div class="container">
+        <h3>步骤1：加载模型</h3>
+        <button id="loadBtn" onclick="loadModels()">加载模型</button>
+    </div>
+    
+    <div class="container">
+        <h3>步骤2：打开摄像头</h3>
+        <button id="cameraBtn" onclick="startCamera()" disabled>打开摄像头</button>
+    </div>
+    
+    <div class="container">
+        <h3>视频预览</h3>
+        <div style="position: relative; display: inline-block;">
+            <video id="video" autoplay playsinline muted style="width: 640px; height: 480px; transform: scaleX(-1);"></video>
+            <canvas id="canvas" style="position: absolute; top: 0; left: 0; width: 640px; height: 480px;"></canvas>
+        </div>
+    </div>
+    
+    <div class="container">
+        <h3>步骤3：检测人脸</h3>
+        <button id="detectBtn" onclick="startDetection()" disabled>开始检测</button>
+        <button id="stopBtn" onclick="stopDetection()" disabled>停止检测</button>
+    </div>
+    
+    <div id="log"></div>
+    
+    <script src="/static/face-api.js"></script>
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let detectionInterval = null;
+        let modelsLoaded = false;
+        let stream = null;
+        
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = type;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            document.getElementById('log').appendChild(div);
+            document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+            console.log(message);
+        }
+        
+        async function loadModels() {
+            try {
+                log('开始加载模型...');
+                
+                const MODEL_URL = '/static/models';
+                log('MODEL_URL: ' + MODEL_URL);
+                
+                log('检查 faceapi 对象...');
+                log('faceapi 存在: ' + (typeof faceapi !== 'undefined'));
+                if (typeof faceapi !== 'undefined') {
+                    log('tinyFaceDetector 存在: ' + (typeof faceapi.nets.tinyFaceDetector !== 'undefined'));
+                    log('faceLandmark68Net 存在: ' + (typeof faceapi.nets.faceLandmark68Net !== 'undefined'));
+                    log('faceRecognitionNet 存在: ' + (typeof faceapi.nets.faceRecognitionNet !== 'undefined'));
+                }
+                
+                log('加载 tinyFaceDetector...');
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                log('✓ tinyFaceDetector 加载成功', 'success');
+                
+                log('加载 faceLandmark68Net...');
+                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+                log('✓ faceLandmark68Net 加载成功', 'success');
+                
+                log('加载 faceRecognitionNet...');
+                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+                log('✓ faceRecognitionNet 加载成功', 'success');
+                
+                modelsLoaded = true;
+                document.getElementById('cameraBtn').disabled = false;
+                log('所有模型加载完成！', 'success');
+            } catch (e) {
+                log('模型加载失败: ' + e.message, 'error');
+                log('堆栈: ' + e.stack, 'error');
+            }
+        }
+        
+        async function startCamera() {
+            if (!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') && typeof navigator.getUserMedia !== 'function') {
+                log('浏览器不支持 getUserMedia 或当前为非安全上下文（需 HTTPS 或 localhost）', 'error');
+                return;
+            }
+
+            try {
+                log('请求摄像头权限...');
+
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 640, height: 480, facingMode: 'user' }
+                });
+                
+                video.srcObject = stream;
+                
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        video.play().then(resolve);
+                    };
+                });
+                
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                log('摄像头已打开: ' + video.videoWidth + 'x' + video.videoHeight, 'success');
+                document.getElementById('detectBtn').disabled = false;
+            } catch (e) {
+                log('摄像头打开失败: ' + e.message, 'error');
+            }
+        }
+        
+        async function startDetection() {
+            if (!modelsLoaded) {
+                log('请先加载模型', 'error');
+                return;
+            }
+            
+            document.getElementById('detectBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            
+            log('开始检测人脸...');
+            
+            detectionInterval = setInterval(async () => {
+                try {
+                    if (video.readyState < 2) {
+                        log('视频未准备好，就绪状态: ' + video.readyState);
+                        return;
+                    }
+                    
+                    log('执行检测...');
+                    
+                    const options = new faceapi.TinyFaceDetectorOptions({
+                        inputSize: 320,
+                        scoreThreshold: 0.3
+                    });
+                    
+                    log('调用 detectAllFaces...');
+                    const detections = await faceapi.detectAllFaces(video, options);
+                    
+                    log('检测结果: ' + detections.length + ' 张人脸');
+                    
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    if (detections.length > 0) {
+                        log('✓ 检测到人脸！', 'success');
+                        
+                        const displaySize = { width: canvas.width, height: canvas.height };
+                        const resizedDetections = faceapi.resizeResults(detections, displaySize);
+                        
+                        faceapi.draw.drawDetections(canvas, resizedDetections);
+                    }
+                } catch (e) {
+                    log('检测错误: ' + e.message, 'error');
+                }
+            }, 1000);
+        }
+        
+        function stopDetection() {
+            if (detectionInterval) {
+                clearInterval(detectionInterval);
+                detectionInterval = null;
+            }
+            document.getElementById('detectBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            log('检测已停止');
+        }
+        
+        log('页面已加载，请点击"加载模型"开始');
+    </script>
+</body>
+</html>

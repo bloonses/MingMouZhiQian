@@ -1,0 +1,641 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="margin-bottom: 20px; display: flex; align-items: center; gap: 20px;">
+    <h1 style="font-size: 32px; margin: 0;">🎓 批量人脸识别签到</h1>
+    <div style="flex: 1;"></div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+        <label style="font-weight: bold;">选择课程：</label>
+        <select id="courseSelect" style="width: 200px; padding: 8px 12px; font-size: 16px; border-radius: 8px;">
+            <option value="">请选择课程</option>
+            {% for course in courses %}
+            <option value="{{ course.id }}">{{ course.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button id="toggleDebugBtn" style="padding: 8px 16px; font-size: 14px; background: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer;">
+        🔧 调试
+    </button>
+</div>
+
+<div style="display: flex; gap: 24px; height: calc(100vh - 180px);">
+    <div style="flex: 1.5; position: relative; background: #0f172a; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+        <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b;" id="emptyVideoState">
+            <div style="font-size: 80px; margin-bottom: 20px;">📹</div>
+            <div style="font-size: 24px;">摄像头未启动</div>
+            <div style="font-size: 16px; margin-top: 8px; color: #475569;">请选择课程以启动批量签到系统</div>
+        </div>
+        
+        <video id="video" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; display: none; transform: scaleX(-1);"></video>
+        <canvas id="canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; transform: scaleX(-1);"></canvas>
+        
+        <div id="cameraStatus" style="position: absolute; top: 16px; left: 16px; background: rgba(0,0,0,0.7); color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; display: none;">
+            <span id="cameraStatusText">🟢 摄像头运行中</span>
+        </div>
+        
+        <div id="detectionInfo" style="position: absolute; top: 16px; right: 16px; background: rgba(0,0,0,0.7); color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; display: none;">
+            <span id="faceCount">检测到 0 张人脸</span>
+            <span style="margin-left: 12px;" id="recognizedCount">已识别 0 人</span>
+        </div>
+        
+        <div id="scanIndicator" style="position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 12px 24px; border-radius: 24px; font-size: 16px; display: none;">
+            <span id="scanStatus">🎯 请面向摄像头，自动识别签到</span>
+        </div>
+    </div>
+    
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 20px;">
+        <div style="display: flex; gap: 16px;">
+            <div style="flex: 1; background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; padding: 20px; border-radius: 16px; text-align: center; box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);">
+                <div style="font-size: 48px; font-weight: bold;" id="totalCount">0</div>
+                <div style="font-size: 16px; opacity: 0.9;">应到人数</div>
+            </div>
+            <div style="flex: 1; background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px; border-radius: 16px; text-align: center; box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);">
+                <div style="font-size: 48px; font-weight: bold;" id="attendedCount">0</div>
+                <div style="font-size: 16px; opacity: 0.9;">已签到</div>
+            </div>
+            <div style="flex: 1; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; padding: 20px; border-radius: 16px; text-align: center; box-shadow: 0 4px 20px rgba(245, 158, 11, 0.3);">
+                <div style="font-size: 48px; font-weight: bold;" id="unattendedCount">0</div>
+                <div style="font-size: 16px; opacity: 0.9;">未签到</div>
+            </div>
+        </div>
+        
+        <div id="statusPanel" style="background: white; padding: 16px 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <span id="status" style="font-size: 18px; color: #64748b;">请选择课程启动批量签到</span>
+        </div>
+        
+        <div style="flex: 1; background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="margin: 0; font-size: 20px; color: #1e293b;">📋 学生签到状态</h3>
+                <div style="display: flex; gap: 8px;">
+                    <button id="clearBtn" class="btn btn-danger" style="padding: 6px 12px; font-size: 12px; display: none;">
+                        🗑️ 清除签到
+                    </button>
+                    <button id="refreshBtn" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px; display: none;">
+                        🔄 刷新
+                    </button>
+                </div>
+            </div>
+            <div style="flex: 1; overflow-y: auto;" id="studentList">
+                <div style="text-align: center; color: #94a3b8; padding: 40px;">
+                    请选择课程查看学生列表
+                </div>
+            </div>
+        </div>
+        
+        <div style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-height: 200px;">
+            <h3 style="margin: 0 0 12px 0; font-size: 18px; color: #1e293b;">🕐 最近签到</h3>
+            <div class="recent-list" id="recentList" style="max-height: 150px; overflow-y: auto;"></div>
+        </div>
+    </div>
+</div>
+
+<div id="successPopup" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 60px 100px; border-radius: 30px; box-shadow: 0 30px 80px rgba(0,0,0,0.4); z-index: 1000; text-align: center;">
+    <div style="font-size: 100px; margin-bottom: 20px;">✅</div>
+    <div id="popupName" style="font-size: 48px; font-weight: bold; margin-bottom: 12px;"></div>
+    <div style="font-size: 32px; opacity: 0.95;">已进入教室</div>
+</div>
+
+<div id="multiPopup" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: white; padding: 40px 60px; border-radius: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); z-index: 1000; text-align: center;">
+    <div style="font-size: 64px; margin-bottom: 16px;">🎊</div>
+    <div id="multiCount" style="font-size: 36px; font-weight: bold; margin-bottom: 8px;"></div>
+    <div style="font-size: 24px; opacity: 0.95;">人已成功签到</div>
+</div>
+
+<div id="debugPanel" style="display: none; margin-top: 16px; padding: 16px; background: #1e293b; color: #e2e8f0; border-radius: 12px; font-size: 13px; max-height: 250px; overflow-y: auto; font-family: monospace;">
+    <strong style="color: #60a5fa;">🔍 调试信息:</strong>
+    <div id="debugContent" style="margin-top: 8px;"></div>
+</div>
+
+<style>
+@keyframes popupAnimation {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+    50% { transform: translate(-50%, -50%) scale(1.05); }
+    100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.recognized-box {
+    border: 3px solid #10b981 !important;
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+}
+
+.unrecognized-box {
+    border: 3px solid #f59e0b !important;
+}
+</style>
+
+<script src="/static/face-api.js"></script>
+<script>
+const MODEL_URL = '/static/models';
+let stream = null;
+let modelsLoaded = false;
+let videoReady = false;
+let currentCourseId = null;
+let currentClasses = [];
+let lastRecognitionTime = 0;
+let attendedStudents = new Set();
+let recognizedFaces = new Map();
+let isProcessing = false;
+let isSwitchingCourse = false;
+let frameId = null;
+let lastBatchTime = 0;
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+let ctx = null;
+
+function showSuccessPopup(name) {
+    const popup = document.getElementById('successPopup');
+    const popupName = document.getElementById('popupName');
+    popupName.textContent = name;
+    popup.style.display = 'block';
+    popup.style.animation = 'popupAnimation 0.6s ease-out';
+    setTimeout(() => { popup.style.display = 'none'; }, 2000);
+}
+
+function showMultiPopup(count) {
+    const popup = document.getElementById('multiPopup');
+    const multiCount = document.getElementById('multiCount');
+    multiCount.textContent = count + '位同学';
+    popup.style.display = 'block';
+    popup.style.animation = 'popupAnimation 0.6s ease-out';
+    setTimeout(() => { popup.style.display = 'none'; }, 2500);
+}
+
+function showDebug(message, type = 'info') {
+    const contentDiv = document.getElementById('debugContent');
+    if (!contentDiv) return;
+    const time = new Date().toLocaleTimeString();
+    const color = type === 'error' ? '#f87171' : type === 'success' ? '#4ade80' : type === 'warning' ? '#fbbf24' : '#94a3b8';
+    contentDiv.innerHTML += `<div style="color: ${color};">[${time}] ${message}</div>`;
+    contentDiv.scrollTop = contentDiv.scrollHeight;
+    console.log('[' + type.toUpperCase() + ']', message);
+}
+
+function toggleDebugPanel() {
+    const panel = document.getElementById('debugPanel');
+    const btn = document.getElementById('toggleDebugBtn');
+    if (!panel || !btn) return;
+    if (panel.style.display === 'none' || panel.style.display === '') {
+        panel.style.display = 'block';
+        btn.textContent = '🔧 隐藏调试';
+    } else {
+        panel.style.display = 'none';
+        btn.textContent = '🔧 显示调试';
+    }
+}
+
+async function loadModels() {
+    if (modelsLoaded) return;
+    try {
+        showDebug('加载人脸识别模型...');
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+        modelsLoaded = true;
+        showDebug('✓ 所有模型加载完成', 'success');
+    } catch (error) {
+        showDebug('模型加载失败: ' + error.message, 'error');
+    }
+}
+
+async function loadCourseInfo(courseId) {
+    try {
+        showDebug(`加载课程 ${courseId} 的信息...`);
+        const response = await fetch(`/api/get_course_info/${courseId}`);
+        
+        if (!response.ok) {
+            throw new Error('HTTP错误: ' + response.status);
+        }
+        
+        const data = await response.json();
+        
+        if (!data || typeof data !== 'object') {
+            throw new Error('响应数据格式错误');
+        }
+        
+        if (!data.success) {
+            throw new Error(data.error || '加载课程信息失败');
+        }
+        
+        showDebug(`✓ 课程信息加载完成: ${data.course_name}`, 'success');
+        
+        currentClasses = data.classes || [];
+        const allStudents = data.students || [];
+        
+        document.getElementById('totalCount').textContent = allStudents.length;
+        const attended = allStudents.filter(s => s.attended);
+        document.getElementById('attendedCount').textContent = attended.length;
+        document.getElementById('unattendedCount').textContent = allStudents.length - attended.length;
+        
+        attendedStudents = new Set(attended.map(s => s.id));
+        renderStudentList(allStudents);
+        updateRecentList(attended);
+        document.getElementById('clearBtn').style.display = attended.length > 0 ? 'block' : 'none';
+        document.getElementById('refreshBtn').style.display = 'block';
+        
+        return allStudents;
+    } catch (error) {
+        showDebug('加载课程信息失败: ' + error.message, 'error');
+        return [];
+    }
+}
+
+function renderStudentList(students) {
+    const list = document.getElementById('studentList');
+    if (students.length === 0) {
+        list.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 40px;">该课程暂无学生</div>';
+        return;
+    }
+    list.innerHTML = students.map(s => `
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px; border-bottom: 1px solid #f3f4f6; background: ${s.attended ? '#dcfce7' : 'white'}">
+            <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #00ff88, #00cc66); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">${s.name[0]}</div>
+            <div style="flex: 1;">
+                <p style="margin: 0; font-weight: 500;">${s.name}</p>
+                <p style="margin: 0; font-size: 12px; color: #6b7280;">${s.student_id} | ${s.class_name}</p>
+            </div>
+            ${s.attended ? '<span style="color: #10b981; font-size: 20px;">✓</span>' : 
+              `<button onclick="manualCheckin(${s.id})" style="padding: 6px; border: none; background: #dbeafe; border-radius: 4px; cursor: pointer;">📝</button>`}
+        </div>
+    `).join('');
+}
+
+function updateRecentList(students) {
+    const list = document.getElementById('recentList');
+    if (students.length === 0) {
+        list.innerHTML = '<div style="text-align: center; padding: 20px; color: #6b7280;">暂无签到记录</div>';
+        return;
+    }
+    const sortedStudents = [...students].sort((a, b) => {
+        const aTime = new Date(a.check_in_time || 0);
+        const bTime = new Date(b.check_in_time || 0);
+        return bTime - aTime;
+    });
+    list.innerHTML = sortedStudents.slice(0, 6).map(s => `
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px; border-bottom: 1px solid #e5e7eb;">
+            <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #00ff88, #00cc66); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">${s.name[0]}</div>
+            <div style="flex: 1;">
+                <p style="margin: 0; font-weight: 500;">${s.name}</p>
+                <p style="margin: 0; font-size: 12px; color: #6b7280;">${s.check_in_time ? new Date(s.check_in_time).toLocaleTimeString() : '刚刚'}</p>
+            </div>
+            <span style="color: #10b981; font-size: 20px;">✓</span>
+        </div>
+    `).join('');
+}
+
+async function recognizeFaces(detections, students) {
+    if (!students || students.length === 0) return [];
+    
+    try {
+        const labeledDescriptors = students
+            .filter(s => s.face_descriptor)
+            .map(s => {
+                try {
+                    const binaryData = atob(s.face_descriptor);
+                    const buffer = new ArrayBuffer(binaryData.length);
+                    const view = new Uint8Array(buffer);
+                    for (let i = 0; i < binaryData.length; i++) {
+                        view[i] = binaryData.charCodeAt(i);
+                    }
+                    const descriptor = new Float32Array(buffer);
+                    return new faceapi.LabeledFaceDescriptors(s.name, [descriptor]);
+                } catch (e) {
+                    showDebug('解析人脸特征失败: ' + e.message, 'warning');
+                    return null;
+                }
+            })
+            .filter(Boolean);
+        
+        if (labeledDescriptors.length === 0) {
+            showDebug('没有可用的人脸特征数据', 'warning');
+            return [];
+        }
+        
+        const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5);
+        const results = [];
+        
+        for (const detection of detections) {
+            if (detection.descriptor) {
+                const match = faceMatcher.findBestMatch(detection.descriptor);
+                if (match.distance < 0.5) {
+                    const student = students.find(s => s.name === match.label);
+                    if (student && !attendedStudents.has(student.id)) {
+                        results.push({ student, detection, confidence: (1 - match.distance) * 100 });
+                    }
+                }
+            }
+        }
+        
+        return results;
+    } catch (error) {
+        showDebug('人脸识别错误: ' + error.message, 'error');
+        return [];
+    }
+}
+
+async function processFrame(students) {
+    if (!videoReady || !video || isProcessing) return;
+    
+    isProcessing = true;
+    
+    try {
+        const options = new faceapi.TinyFaceDetectorOptions({
+            inputSize: 416,
+            scoreThreshold: 0.4
+        });
+        
+        const detections = await faceapi.detectAllFaces(video, options)
+            .withFaceLandmarks()
+            .withFaceDescriptors();
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const displaySize = { width: canvas.width, height: canvas.height };
+        const resizedDetections = faceapi.resizeResults(detections, displaySize);
+        
+        document.getElementById('faceCount').textContent = `检测到 ${detections.length} 张人脸`;
+        
+        if (detections.length > 0) {
+            const recognizedResults = await recognizeFaces(resizedDetections, students);
+            
+            resizedDetections.forEach((detection, index) => {
+                const box = detection.detection.box;
+                const recognized = recognizedResults.find(r => r.detection === detection);
+                
+                let boxColor = '#f59e0b';
+                let boxWidth = 2;
+                let label = '未知';
+                
+                if (recognized) {
+                    boxColor = '#10b981';
+                    boxWidth = 4;
+                    label = `${recognized.student.name}`;
+                }
+                
+                ctx.strokeStyle = boxColor;
+                ctx.lineWidth = boxWidth;
+                ctx.strokeRect(box.x, box.y, box.width, box.height);
+                
+                ctx.fillStyle = boxColor;
+                ctx.font = 'bold 14px Arial';
+                ctx.fillText(label, box.x, box.y - 5);
+            });
+            
+            document.getElementById('recognizedCount').textContent = `已识别 ${recognizedResults.length} 人`;
+            
+            if (recognizedResults.length > 0) {
+                const now = Date.now();
+                if (now - lastBatchTime > 1500) {
+                    lastBatchTime = now;
+                    await batchCheckin(recognizedResults);
+                }
+            }
+        }
+        
+    } catch (error) {
+        showDebug('处理帧错误: ' + error.message, 'error');
+    } finally {
+        isProcessing = false;
+    }
+}
+
+async function batchCheckin(results) {
+    try {
+        const studentIds = results.map(r => r.student.id);
+        const newStudents = studentIds.filter(id => !attendedStudents.has(id));
+        
+        if (newStudents.length === 0) {
+            showDebug('所有检测到的学生已签到', 'info');
+            return;
+        }
+        
+        showDebug(`准备批量签到 ${newStudents.length} 名学生...`, 'info');
+        
+        showDebug(`发送批量签到请求: ${newStudents.length} 名学生, 课程ID: ${currentCourseId}`, 'info');
+        
+        const response = await fetch('/api/batch_checkin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                student_ids: newStudents,
+                course_id: currentCourseId
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('批量签到请求失败: ' + response.status);
+        }
+        
+        const result = await response.json();
+        
+        if (!result || typeof result !== 'object') {
+            throw new Error('批量签响应数据格式错误');
+        }
+        
+        if (result.success) {
+            newStudents.forEach(id => attendedStudents.add(id));
+            
+            const studentNames = results
+                .filter(r => newStudents.includes(r.student.id))
+                .map(r => r.student.name);
+            
+            showDebug(`✓ 成功签到 ${newStudents.length} 人: ${studentNames.join(', ')}`, 'success');
+            
+            if (newStudents.length === 1) {
+                showSuccessPopup(studentNames[0]);
+            } else {
+                showMultiPopup(newStudents.length);
+            }
+            
+            await loadCourseInfo(currentCourseId);
+        } else {
+            showDebug('批量签到失败: ' + result.message, 'error');
+        }
+    } catch (error) {
+        showDebug('批量签到错误: ' + error.message, 'error');
+    }
+}
+
+async function manualCheckin(studentId) {
+    try {
+        showDebug(`手动签到学生 ID: ${studentId}`, 'info');
+        
+        const response = await fetch('/api/checkin_manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ student_id: studentId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showDebug('✓ 手动签到成功', 'success');
+            showSuccessPopup(result.name);
+            await loadCourseInfo(currentCourseId);
+        } else {
+            showDebug('手动签到失败: ' + result.message, 'error');
+        }
+    } catch (error) {
+        showDebug('手动签到错误: ' + error.message, 'error');
+    }
+}
+
+async function clearAttendance() {
+    if (!confirm('确定要清除今日所有签到记录吗？')) return;
+    
+    try {
+        showDebug('清除今日签到记录...', 'info');
+        
+        const response = await fetch(`/api/clear_today_attendance_by_course/${currentCourseId}`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showDebug('✓ 签到记录已清除', 'success');
+            attendedStudents.clear();
+            await loadCourseInfo(currentCourseId);
+        } else {
+            showDebug('清除失败: ' + result.message, 'error');
+        }
+    } catch (error) {
+        showDebug('清除签到错误: ' + error.message, 'error');
+    }
+}
+
+function startDetectionLoop(students) {
+    function loop() {
+        processFrame(students);
+        frameId = requestAnimationFrame(loop);
+    }
+    loop();
+}
+
+function stopDetection() {
+    if (frameId) {
+        cancelAnimationFrame(frameId);
+        frameId = null;
+    }
+}
+
+async function startCamera() {
+    if (stream) return;
+    if (!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') && typeof navigator.getUserMedia !== 'function') {
+        showDebug('浏览器不支持 getUserMedia 或当前为非安全上下文（需 HTTPS 或 localhost）', 'error');
+        document.getElementById('status').textContent = '无法访问摄像头（浏览器不支持或非安全上下文）';
+        return;
+    }
+
+    try {
+        showDebug('请求摄像头权限...', 'info');
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: { 
+                width: 1280, 
+                height: 720,
+                facingMode: 'environment'
+            },
+            audio: false
+        });
+        
+        video.srcObject = stream;
+        
+        video.onloadedmetadata = () => {
+            videoReady = true;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx = canvas.getContext('2d');
+            
+            document.getElementById('video').style.display = 'block';
+            document.getElementById('emptyVideoState').style.display = 'none';
+            document.getElementById('cameraStatus').style.display = 'block';
+            document.getElementById('detectionInfo').style.display = 'block';
+            document.getElementById('scanIndicator').style.display = 'block';
+            
+            showDebug('✓ 摄像头已打开: ' + video.videoWidth + 'x' + video.videoHeight, 'success');
+        };
+    } catch (error) {
+        showDebug('摄像头启动失败: ' + error.message, 'error');
+        document.getElementById('status').textContent = '❌ 无法访问摄像头，请检查权限';
+    }
+}
+
+function stopCamera() {
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+        videoReady = false;
+    }
+    video.srcObject = null;
+    document.getElementById('video').style.display = 'none';
+    document.getElementById('emptyVideoState').style.display = 'flex';
+    document.getElementById('cameraStatus').style.display = 'none';
+    document.getElementById('detectionInfo').style.display = 'none';
+    document.getElementById('scanIndicator').style.display = 'none';
+}
+
+async function onCourseChange(event) {
+    const courseId = event.target.value;
+    
+    if (courseId === '') {
+        stopDetection();
+        stopCamera();
+        currentCourseId = null;
+        currentClasses = [];
+        attendedStudents.clear();
+        document.getElementById('status').textContent = '请选择课程启动批量签到';
+        document.getElementById('totalCount').textContent = '0';
+        document.getElementById('attendedCount').textContent = '0';
+        document.getElementById('unattendedCount').textContent = '0';
+        document.getElementById('studentList').innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 40px;">请选择课程查看学生列表</div>';
+        document.getElementById('recentList').innerHTML = '<div style="text-align: center; padding: 20px; color: #6b7280;">暂无签到记录</div>';
+        document.getElementById('clearBtn').style.display = 'none';
+        document.getElementById('refreshBtn').style.display = 'none';
+        return;
+    }
+    
+    if (isSwitchingCourse) {
+        showDebug('正在切换课程中，请稍候...', 'info');
+        return;
+    }
+    
+    isSwitchingCourse = true;
+    
+    try {
+        stopDetection();
+        
+        document.getElementById('status').textContent = '🔄 正在加载课程信息...';
+        
+        currentCourseId = courseId;
+        
+        await loadModels();
+        
+        const students = await loadCourseInfo(courseId);
+        
+        await startCamera();
+        
+        document.getElementById('status').textContent = '✅ 系统就绪，请面向摄像头进行批量签到';
+        
+        setTimeout(() => {
+            startDetectionLoop(students);
+        }, 500);
+        
+    } catch (error) {
+        showDebug('切换课程失败: ' + error.message, 'error');
+        document.getElementById('status').textContent = '❌ 加载课程失败，请重试';
+    } finally {
+        isSwitchingCourse = false;
+    }
+}
+
+document.getElementById('courseSelect').addEventListener('change', onCourseChange);
+document.getElementById('toggleDebugBtn').addEventListener('click', toggleDebugPanel);
+document.getElementById('clearBtn').addEventListener('click', clearAttendance);
+document.getElementById('refreshBtn').addEventListener('click', () => {
+    if (currentCourseId) {
+        loadCourseInfo(currentCourseId);
+    }
+});
+
+showDebug('批量签到页面已加载', 'info');
+</script>
+{% endblock %}

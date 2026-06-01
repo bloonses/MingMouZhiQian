@@ -1,0 +1,496 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="page-title">📈 数据统计</h1>
+
+<div class="card">
+    <div style="margin-bottom: 28px;">
+        <label style="font-weight: 700; font-size: 14px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 10px;">选择班级</label>
+        <select id="classSelect" style="width: 320px;">
+            <option value="">请选择班级</option>
+            {% for cls in classes %}
+            <option value="{{ cls.id }}">{{ cls.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    
+    <div id="statsPanel" style="display: none;">
+        <div class="stats">
+            <div class="stat-card" style="animation-delay: 0.1s;">
+                <div class="value" id="totalStudents">0</div>
+                <div class="label">学生总数</div>
+            </div>
+            <div class="stat-card" style="animation-delay: 0.2s;">
+                <div class="value" id="todayAttendance">0</div>
+                <div class="label">今日签到</div>
+            </div>
+            <div class="stat-card" style="animation-delay: 0.3s;">
+                <div class="value" id="todayRate">0%</div>
+                <div class="label">今日出勤率</div>
+            </div>
+            <div class="stat-card" style="animation-delay: 0.4s;">
+                <div class="value" id="totalAttendances">0</div>
+                <div class="label">总签到次数</div>
+            </div>
+            <div class="stat-card" style="animation-delay: 0.5s;">
+                <div class="value" id="avgAttendance">0</div>
+                <div class="label">人均签到次数</div>
+            </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 28px; margin-top: 40px;">
+            <div class="card" style="margin-bottom: 0;">
+                <h3 style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 24px;">📅</span>
+                    <span style="font-weight: 700; color: var(--text-primary);">近7天出勤情况</span>
+                </h3>
+                <div style="padding: 24px; background: var(--bg-surface);">
+                    <canvas id="lineChart" width="500" height="240"></canvas>
+                </div>
+            </div>
+            
+            <div class="card" style="margin-bottom: 0;">
+                <h3 style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 24px;">🕐</span>
+                    <span style="font-weight: 700; color: var(--text-primary);">签到时间分布</span>
+                </h3>
+                <div style="padding: 24px; background: var(--bg-surface);">
+                    <canvas id="hourChart" width="500" height="240"></canvas>
+                </div>
+            </div>
+            
+            <div class="card" style="margin-bottom: 0;">
+                <h3 style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 24px;">📊</span>
+                    <span style="font-weight: 700; color: var(--text-primary);">签到方式分布</span>
+                </h3>
+                <div style="padding: 24px; background: var(--bg-surface);">
+                    <canvas id="methodChart" width="500" height="240"></canvas>
+                </div>
+            </div>
+            
+            <div class="card" style="margin-bottom: 0;">
+                <h3 style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 24px;">🏆</span>
+                    <span style="font-weight: 700; color: var(--text-primary);">学生出勤排名</span>
+                </h3>
+                <div style="padding: 24px; background: var(--bg-surface);">
+                    <canvas id="studentChart" width="500" height="280"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 40px;">
+            <div class="card" style="margin-bottom: 0;">
+                <h3 style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 24px;">📋</span>
+                    <span style="font-weight: 700; color: var(--text-primary);">详细出勤列表</span>
+                </h3>
+                <div style="background: var(--bg-surface); padding: 20px;">
+                    <table id="studentTable" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left; padding: 14px; background: rgba(0,255,136,0.08);">排名</th>
+                                <th style="text-align: left; padding: 14px; background: rgba(0,255,136,0.08);">学生姓名</th>
+                                <th style="text-align: left; padding: 14px; background: rgba(0,255,136,0.08);">签到次数</th>
+                                <th style="text-align: left; padding: 14px; background: rgba(0,255,136,0.08);">状态</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="emptyState" style="text-align: center; padding: 80px;">
+        <div style="font-size: 80px; margin-bottom: 20px; animation: float 3s ease-in-out infinite;">📊</div>
+        <h3 style="font-size: 24px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px;">请选择班级查看统计</h3>
+        <p style="color: var(--text-muted); font-size: 16px;">选择一个班级以查看详细的数据统计和分析</p>
+    </div>
+</div>
+
+<style>
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+}
+</style>
+
+<script>
+document.getElementById('classSelect').addEventListener('change', async (e) => {
+    const classId = e.target.value;
+    if (classId) {
+        document.getElementById('statsPanel').style.display = 'block';
+        document.getElementById('emptyState').style.display = 'none';
+        
+        const response = await fetch(`/api/get_statistics/${classId}`);
+        const stats = await response.json();
+        
+        animateNumber('totalStudents', stats.total_students);
+        animateNumber('todayAttendance', stats.today_attendance);
+        animateValue('todayRate', 0, stats.today_rate, '%');
+        animateNumber('totalAttendances', stats.total_attendances);
+        animateValue('avgAttendance', 0, stats.avg_attendance, '');
+        
+        renderLineChart(stats.weekly_data);
+        renderHourChart(stats.hour_distribution);
+        renderMethodChart(stats.method_distribution);
+        renderStudentChart(stats.student_attendance);
+        renderStudentTable(stats.student_attendance);
+    } else {
+        document.getElementById('statsPanel').style.display = 'none';
+        document.getElementById('emptyState').style.display = 'block';
+    }
+});
+
+function animateNumber(id, target) {
+    const el = document.getElementById(id);
+    let current = 0;
+    const duration = 1000;
+    const step = target / (duration / 16);
+    
+    const animate = () => {
+        current += step;
+        if (current < target) {
+            el.textContent = Math.floor(current);
+            requestAnimationFrame(animate);
+        } else {
+            el.textContent = target;
+        }
+    };
+    animate();
+}
+
+function animateValue(id, start, end, suffix) {
+    const el = document.getElementById(id);
+    const duration = 1000;
+    const startTime = Date.now();
+    
+    const animate = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const current = start + (end - start) * easeOutQuad(progress);
+        el.textContent = current.toFixed(1) + suffix;
+        
+        if (progress < 1) {
+            requestAnimationFrame(animate);
+        }
+    };
+    animate();
+}
+
+function easeOutQuad(t) {
+    return t * (2 - t);
+}
+
+function renderLineChart(data) {
+    const canvas = document.getElementById('lineChart');
+    const ctx = canvas.getContext('2d');
+    
+    const width = canvas.width;
+    const height = canvas.height;
+    const padding = { top: 40, right: 40, bottom: 60, left: 60 };
+    
+    ctx.clearRect(0, 0, width, height);
+    
+    const maxCount = Math.max(...data.map(d => d.count), 1);
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+    const stepX = chartWidth / (data.length - 1);
+    
+    const points = data.map((d, i) => ({
+        x: padding.left + i * stepX,
+        y: padding.top + chartHeight - (d.count / maxCount) * chartHeight,
+        count: d.count,
+        date: d.date.slice(5)
+    }));
+    
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 1;
+    
+    for (let i = 0; i <= 5; i++) {
+        const y = padding.top + (chartHeight / 5) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+        ctx.stroke();
+        
+        const value = Math.round(maxCount - (maxCount / 5) * i);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.font = '13px "Noto Sans SC", sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(value.toString(), padding.left - 15, y + 4);
+    }
+    
+    const gradient = ctx.createLinearGradient(0, 0, 0, height);
+    gradient.addColorStop(0, 'rgba(0, 255, 136, 0.3)');
+    gradient.addColorStop(1, 'rgba(0, 255, 136, 0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, height - padding.bottom);
+    points.forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.lineTo(points[points.length - 1].x, height - padding.bottom);
+    ctx.closePath();
+    ctx.fill();
+    
+    ctx.beginPath();
+    ctx.strokeStyle = '#00ff88';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = '#00ff88';
+    ctx.shadowBlur = 20;
+    
+    points.forEach((point, i) => {
+        if (i === 0) {
+            ctx.moveTo(point.x, point.y);
+        } else {
+            ctx.lineTo(point.x, point.y);
+        }
+    });
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    
+    points.forEach((point, i) => {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 8, 0, Math.PI * 2);
+        ctx.fillStyle = '#00ff88';
+        ctx.fill();
+        ctx.strokeStyle = '#0a0a0f';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.font = '13px "Noto Sans SC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(point.date, point.x, height - 20);
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 14px "Noto Sans SC", sans-serif';
+        ctx.fillText(point.count.toString(), point.x, point.y - 18);
+    });
+}
+
+function renderHourChart(data) {
+    const canvas = document.getElementById('hourChart');
+    const ctx = canvas.getContext('2d');
+    
+    const width = canvas.width;
+    const height = canvas.height;
+    const padding = { top: 40, right: 40, bottom: 50, left: 60 };
+    
+    ctx.clearRect(0, 0, width, height);
+    
+    const maxCount = Math.max(...data, 1);
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+    const barWidth = chartWidth / 24 - 3;
+    
+    for (let i = 0; i <= 5; i++) {
+        const y = padding.top + (chartHeight / 5) * i;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+        ctx.stroke();
+        
+        const value = Math.round(maxCount - (maxCount / 5) * i);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.font = '13px "Noto Sans SC", sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(value.toString(), padding.left - 15, y + 4);
+    }
+    
+    data.forEach((count, hour) => {
+        const barHeight = (count / maxCount) * chartHeight;
+        const x = padding.left + hour * (barWidth + 3);
+        const y = padding.top + chartHeight - barHeight;
+        
+        const gradient = ctx.createLinearGradient(x, y, x, y + barHeight);
+        if (hour >= 7 && hour <= 9) {
+            gradient.addColorStop(0, '#38ef7d');
+            gradient.addColorStop(1, '#11998e');
+        } else {
+            gradient.addColorStop(0, '#00ff88');
+            gradient.addColorStop(1, '#00cc66');
+        }
+        
+        ctx.fillStyle = gradient;
+        ctx.shadowColor = gradient;
+        ctx.shadowBlur = 10;
+        ctx.fillRect(x, y, barWidth, barHeight);
+        ctx.shadowBlur = 0;
+        
+        if (hour % 3 === 0) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.font = '13px "Noto Sans SC", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(hour + ':00', x + barWidth / 2, height - 15);
+        }
+    });
+}
+
+function renderMethodChart(data) {
+    const canvas = document.getElementById('methodChart');
+    const ctx = canvas.getContext('2d');
+    
+    const width = canvas.width;
+    const height = canvas.height;
+    
+    ctx.clearRect(0, 0, width, height);
+    
+    const total = data.face + data.manual;
+    if (total === 0) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.font = '18px "Noto Sans SC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('暂无签到数据', width / 2, height / 2);
+        return;
+    }
+    
+    const facePercent = Math.round((data.face / total) * 100);
+    const manualPercent = 100 - facePercent;
+    
+    const centerX = width / 2;
+    const centerY = height / 2 - 20;
+    const radius = Math.min(width, height) / 3;
+    
+    const faceAngle = (data.face / total) * Math.PI * 2;
+    
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(245, 158, 11, 0.3)';
+    ctx.fill();
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.arc(centerX, centerY, radius, 0, faceAngle);
+    ctx.closePath();
+    const gradient = ctx.createLinearGradient(centerX - radius, centerY, centerX + radius, centerY);
+    gradient.addColorStop(0, '#11998e');
+    gradient.addColorStop(1, '#38ef7d');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.strokeStyle = '#38ef7d';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 16px "Noto Sans SC", sans-serif';
+    ctx.textAlign = 'left';
+    
+    const faceGradient = ctx.createLinearGradient(50, 50, 70, 70);
+    faceGradient.addColorStop(0, '#11998e');
+    faceGradient.addColorStop(1, '#38ef7d');
+    ctx.fillStyle = faceGradient;
+    ctx.beginPath();
+    ctx.roundRect(50, 50, 24, 24, 6);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillText('人脸识别: ' + data.face + '次 (' + facePercent + '%)', 84, 66);
+    
+    const manualGradient = ctx.createLinearGradient(50, 90, 70, 110);
+    manualGradient.addColorStop(0, '#f093fb');
+    manualGradient.addColorStop(1, '#f5576c');
+    ctx.fillStyle = manualGradient;
+    ctx.beginPath();
+    ctx.roundRect(50, 90, 24, 24, 6);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillText('手动签到: ' + data.manual + '次 (' + manualPercent + '%)', 84, 106);
+}
+
+function renderStudentChart(data) {
+    const canvas = document.getElementById('studentChart');
+    const ctx = canvas.getContext('2d');
+    
+    const width = canvas.width;
+    const height = canvas.height;
+    const padding = { top: 20, right: 40, bottom: 30, left: 100 };
+    
+    ctx.clearRect(0, 0, width, height);
+    
+    const displayData = data.slice(0, 10);
+    if (displayData.length === 0) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.font = '18px "Noto Sans SC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('暂无签到数据', width / 2, height / 2);
+        return;
+    }
+    
+    const maxCount = Math.max(...displayData.map(d => d.count), 1);
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+    const barHeight = chartHeight / displayData.length - 8;
+    
+    displayData.forEach((student, i) => {
+        const barWidth = (student.count / maxCount) * chartWidth;
+        const y = padding.top + i * (barHeight + 8);
+        
+        const gradient = ctx.createLinearGradient(padding.left, y, padding.left + barWidth, y);
+        if (i < 3) {
+            gradient.addColorStop(0, '#fa709a');
+            gradient.addColorStop(1, '#fee140');
+        } else {
+            gradient.addColorStop(0, '#00ff88');
+             gradient.addColorStop(1, '#00cc66');
+         }
+        
+        ctx.fillStyle = gradient;
+        ctx.shadowColor = gradient;
+        ctx.shadowBlur = 15;
+        ctx.fillRect(padding.left, y, barWidth, barHeight);
+        ctx.shadowBlur = 0;
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 14px "Noto Sans SC", sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(student.name, padding.left - 15, y + barHeight / 2 + 5);
+        
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 14px "Noto Sans SC", sans-serif';
+        ctx.fillText(student.count.toString(), padding.left + barWidth + 15, y + barHeight / 2 + 5);
+    });
+}
+
+function renderStudentTable(data) {
+    const tbody = document.getElementById('studentTableBody');
+    
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 30px; color: var(--text-muted);">暂无数据</td></tr>';
+        return;
+    }
+    
+    const maxCount = Math.max(...data.map(d => d.count), 1);
+    
+    tbody.innerHTML = data.map((student, index) => {
+        let status = '';
+        if (index < 3) {
+            status = '<span class="badge badge-success">出勤优秀</span>';
+        } else if (student.count >= maxCount * 0.5) {
+            status = '<span class="badge badge-warning">出勤良好</span>';
+        } else {
+            status = '<span class="badge badge-warning">需要关注</span>';
+        }
+        
+        const rankIcons = ['🥇', '🥈', '🥉'];
+        const rank = index < 3 ? rankIcons[index] : '#' + (index + 1);
+        
+        return `
+            <tr style="animation: fadeIn 0.4s ease-out ${index * 0.05}s both;">
+                <td style="padding: 16px; font-weight: 700; font-size: 16px;">${rank}</td>
+                <td style="padding: 16px; font-weight: 600;">${student.name}</td>
+                <td style="padding: 16px; font-weight: 700;">${student.count}次</td>
+                <td style="padding: 16px;">${status}</td>
+            </tr>
+        `;
+    }).join('');
+}
+</script>
+{% endblock %}

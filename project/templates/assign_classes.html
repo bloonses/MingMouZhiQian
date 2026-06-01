@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 style="font-size: 28px; margin-bottom: 8px;">🔗 关联班级</h1>
+<p style="color: var(--text-muted); margin-bottom: 24px;">为课程 <strong>{{ course.name }}</strong> 关联班级</p>
+
+<div class="card" style="max-width: 700px;">
+    <form method="POST" action="/courses/assign/{{ course.id }}">
+        <div class="form-group">
+            <label>选择班级</label>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+                {% for cls in all_classes %}
+                <label class="checkbox-label">
+                    <input type="checkbox" name="classes" value="{{ cls.id }}" {% if cls.id in assigned_class_ids %}checked{% endif %}>
+                    <span>{{ cls.name }}</span>
+                    {% if cls.grade %}
+                    <span style="color: var(--text-muted); font-size: 12px;">({{ cls.grade }})</span>
+                    {% endif %}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        
+        {% if not all_classes %}
+        <div style="text-align: center; padding: 24px; color: var(--text-muted);">
+            <p>暂无班级，请先创建班级</p>
+            <a href="/classes/add" class="btn btn-secondary" style="margin-top: 12px;">创建班级</a>
+        </div>
+        {% else %}
+        <div style="display: flex; gap: 12px;">
+            <button type="submit" class="btn btn-primary" style="flex: 1;">
+                ✅ 保存关联
+            </button>
+            <a href="/courses" class="btn btn-secondary">取消</a>
+        </div>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 style="font-size: 28px; margin-bottom: 8px;">✏️ 编辑课程</h1>
+<p style="color: var(--text-muted); margin-bottom: 24px;">修改课程信息</p>
+
+<div class="card" style="max-width: 600px;">
+    <form method="POST" action="/courses/edit/{{ course.id }}">
+        <div class="form-group">
+            <label>课程名称 *</label>
+            <input type="text" name="name" required value="{{ course.name }}">
+        </div>
+        
+        <div class="form-group">
+            <label>课程代码</label>
+            <input type="text" name="code" value="{{ course.code or '' }}">
+        </div>
+        
+        <div class="form-group">
+            <label>课程描述</label>
+            <textarea name="description" rows="4">{{ course.description or '' }}</textarea>
+        </div>
+        
+        <div style="display: flex; gap: 12px;">
+            <button type="submit" class="btn btn-primary" style="flex: 1;">
+                ✅ 保存修改
+            </button>
+            <a href="/courses" class="btn btn-secondary">取消</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
