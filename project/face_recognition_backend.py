@@ -47,11 +47,49 @@ class LivenessTracker:
         self.nose_history = []
 
 
-_liveness_tracker = LivenessTracker()
+class FaceLivenessPool:
+    def __init__(self):
+        self.trackers = {}
+
+    def update(self, face_idx, nose_tip):
+        if nose_tip is None:
+            return
+        if face_idx not in self.trackers:
+            self.trackers[face_idx] = LivenessTracker()
+        self.trackers[face_idx].update(nose_tip)
+
+    def is_live(self, face_idx):
+        if face_idx not in self.trackers:
+            return False
+        return self.trackers[face_idx].is_live()
+
+    def get_nose_count(self, face_idx):
+        if face_idx not in self.trackers:
+            return 0
+        return self.trackers[face_idx].get_nose_count()
+
+    def any_live(self):
+        return any(t.is_live() for t in self.trackers.values())
+
+    def total_nose_frames(self):
+        return sum(t.get_nose_count() for t in self.trackers.values())
+
+    def reset(self):
+        self.trackers = {}
+
+
+_liveness_pool = FaceLivenessPool()
+
+
+def get_liveness_pool():
+    return _liveness_pool
 
 
 def get_liveness_tracker():
     return _liveness_tracker
+
+
+_liveness_tracker = LivenessTracker()
 
 
 class FaceRecognizer:
@@ -206,19 +244,19 @@ class FaceRecognizer:
         img = self.base64_to_numpy(img_b64)
         faces = self.detect_faces(img)
         
-        tracker = get_liveness_tracker()
-        liveness_ok = False
-        nose_count = 0
+        pool = get_liveness_pool()
         
-        if faces and faces[0].get('nose_tip'):
-            tracker.update(faces[0]['nose_tip'])
-            nose_count = tracker.get_nose_count()
-            liveness_ok = tracker.is_live()
-            print(f'[Recognize] 活体检测: nose_frames={nose_count}, liveness={liveness_ok}')
+        for idx, face in enumerate(faces):
+            if face.get('nose_tip'):
+                pool.update(idx, face['nose_tip'])
         
         recognized_students = []
+        all_liveness_flags = []
         
-        for face in faces:
+        for idx, face in enumerate(faces):
+            face_live = pool.is_live(idx)
+            all_liveness_flags.append(face_live)
+            
             if self.use_real_models and 'embedding' in face:
                 descriptor = face['embedding']
             else:
@@ -238,28 +276,40 @@ class FaceRecognizer:
                 stored = stored / (np.linalg.norm(stored) + 1e-8)
                 cos_sim = float(np.dot(descriptor, stored))
                 distance = float(np.linalg.norm(descriptor - stored))
-                print(f'[Recognize] student_id={student_id} cos_sim={cos_sim:.4f} distance={distance:.4f}')
+                print(f'[Recognize] face_{idx} student_id={student_id} cos_sim={cos_sim:.4f} distance={distance:.4f}')
                 
                 if cos_sim > 0.45 and cos_sim > max_cos_sim:
                     max_cos_sim = cos_sim
                     best_match = student_id
             
             if best_match is not None:
-                if not liveness_ok:
-                    print(f'[Recognize] 匹配到 student_id={best_match} 但活体检测未通过')
+                if not face_live:
+                    print(f'[Recognize] face_{idx} 匹配到 student_id={best_match} 但活体检测未通过')
+                    recognized_students.append({
+                        'student_id': best_match,
+                        'confidence': float(max_cos_sim),
+                        'bbox': face['bbox'],
+                        'liveness': False,
+                        'nose_frames': pool.get_nose_count(idx)
+                    })
                     continue
-                print(f'[Recognize] 匹配成功: student_id={best_match} (cos_sim={max_cos_sim:.4f})')
+                print(f'[Recognize] face_{idx} 匹配成功: student_id={best_match} (cos_sim={max_cos_sim:.4f})')
                 recognized_students.append({
                     'student_id': best_match,
                     'confidence': float(max_cos_sim),
-                    'bbox': face['bbox']
+                    'bbox': face['bbox'],
+                    'liveness': True,
+                    'nose_frames': pool.get_nose_count(idx)
                 })
+        
+        any_live = any(all_liveness_flags) if all_liveness_flags else False
+        total_nose = pool.total_nose_frames()
         
         return {
             'detected_faces': len(faces),
             'recognized': recognized_students,
-            'liveness': liveness_ok,
-            'nose_frames': nose_count
+            'liveness': any_live,
+            'nose_frames': total_nose
         }
 
 

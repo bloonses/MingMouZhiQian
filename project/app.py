@@ -26,6 +26,8 @@ class User(db.Model):
     password_hash = db.Column(db.String(200), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     role = db.Column(db.String(20), default='teacher')
+    security_question = db.Column(db.String(200), default='')
+    security_answer_hash = db.Column(db.String(256), default='')
     # 关联关系
     classes = db.relationship('Class', backref='user', lazy=True)
     students = db.relationship('Student', backref='user', lazy=True)
@@ -116,6 +118,19 @@ with app.app_context():
             conn.execute(text('ALTER TABLE student ADD COLUMN face_descriptor_512 BLOB'))
             conn.commit()
         print('[DB] 已添加 face_descriptor_512 列')
+    
+    # 数据库迁移：为已有数据库添加安全问题和答案列
+    user_columns = [c['name'] for c in inspector.get_columns('user')]
+    if 'security_question' not in user_columns:
+        with db.engine.connect() as conn:
+            conn.execute(text('ALTER TABLE "user" ADD COLUMN security_question VARCHAR(200) DEFAULT \'\''))
+            conn.commit()
+        print('[DB] 已添加 security_question 列')
+    if 'security_answer_hash' not in user_columns:
+        with db.engine.connect() as conn:
+            conn.execute(text('ALTER TABLE "user" ADD COLUMN security_answer_hash VARCHAR(256) DEFAULT \'\''))
+            conn.commit()
+        print('[DB] 已添加 security_answer_hash 列')
     
     if not User.query.filter_by(username='admin').first():
         admin = User(
@@ -227,11 +242,22 @@ def register():
         if len(password) > 100:
             return render_template('register.html', error='密码长度不能超过100位')
         
+        security_question = request.form.get('security_question', '').strip()
+        security_answer = request.form.get('security_answer', '').strip()
+        
+        if not security_question:
+            return render_template('register.html', error='请选择安全问题')
+        
+        if not security_answer:
+            return render_template('register.html', error='请填写安全答案')
+        
         new_user = User(
             username=username,
             name=name,
             password_hash=generate_password_hash(password),
-            role='teacher'
+            role='teacher',
+            security_question=security_question,
+            security_answer_hash=generate_password_hash(security_answer)
         )
         db.session.add(new_user)
         db.session.commit()
@@ -244,6 +270,66 @@ def register():
 def logout():
     session.clear()
     return redirect(url_for('login'))
+
+@app.route('/forgot_password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        step = request.form.get('step', '1')
+        
+        if step == '1':
+            username = request.form.get('username', '').strip()
+            if not username:
+                return render_template('forgot_password.html', error='请输入用户名')
+            user = User.query.filter_by(username=username).first()
+            if not user:
+                return render_template('forgot_password.html', error='用户名不存在')
+            if not user.security_question:
+                return render_template('forgot_password.html', error='该账号未设置安全问题，请联系超级管理员重置密码')
+            return render_template('forgot_password.html', step='2', username=username, security_question=user.security_question)
+        
+        elif step == '2':
+            username = request.form.get('username', '').strip()
+            security_answer = request.form.get('security_answer', '').strip()
+            
+            user = User.query.filter_by(username=username).first()
+            if not user:
+                return render_template('forgot_password.html', error='用户不存在')
+            
+            if not security_answer:
+                return render_template('forgot_password.html', step='2', username=username, security_question=user.security_question, error='请输入安全答案')
+            
+            if not user.security_answer_hash:
+                return render_template('forgot_password.html', error='该账号未设置安全答案，请联系超级管理员重置密码')
+            
+            if not check_password_hash(user.security_answer_hash, security_answer):
+                return render_template('forgot_password.html', step='2', username=username, security_question=user.security_question, error='安全答案不正确')
+            
+            return render_template('forgot_password.html', step='3', username=username)
+        
+        elif step == '3':
+            username = request.form.get('username', '').strip()
+            new_password = request.form.get('new_password', '')
+            confirm_password = request.form.get('confirm_password', '')
+            
+            if not new_password or not confirm_password:
+                return render_template('forgot_password.html', step='3', username=username, error='请填写所有字段')
+            
+            if new_password != confirm_password:
+                return render_template('forgot_password.html', step='3', username=username, error='两次密码不一致')
+            
+            if len(new_password) < 6:
+                return render_template('forgot_password.html', step='3', username=username, error='密码至少6位')
+            
+            user = User.query.filter_by(username=username).first()
+            if not user:
+                return render_template('forgot_password.html', error='用户不存在')
+            
+            user.password_hash = generate_password_hash(new_password)
+            db.session.commit()
+            
+            return render_template('forgot_password.html', step='4', success='密码重置成功！请返回登录')
+    
+    return render_template('forgot_password.html')
 
 @app.route('/courses')
 def courses():
@@ -785,7 +871,7 @@ def get_students(class_id):
                 'id': student.id,
                 'name': student.name,
                 'student_id': student.student_id,
-                'face_descriptor': np.frombuffer(student.face_descriptor, dtype=np.float32).tolist() if student.face_descriptor else None,
+                'face_descriptor': None,
                 'attended': attended
             })
         
@@ -897,7 +983,7 @@ def clear_today_attendance_by_course(course_id):
     
     return jsonify({'success': True, 'message': '课程今日签到数据已清除'})
 
-from face_recognition_backend import get_recognizer, get_liveness_tracker
+from face_recognition_backend import get_recognizer, get_liveness_tracker, get_liveness_pool
 
 
 @app.route('/api/recognize_face', methods=['POST'])
@@ -909,47 +995,76 @@ def recognize_face():
     data = request.json
     class_id = data['class_id']
     course_id = data.get('course_id')
-    descriptor = np.array(data['descriptor'], dtype=np.float32)
-    descriptor = descriptor / (np.linalg.norm(descriptor) + 1e-8)
+    
+    descriptors_data = data.get('descriptors', [data.get('descriptor')])
+    if not isinstance(descriptors_data, list):
+        descriptors_data = [descriptors_data]
+    if descriptors_data[0] is None:
+        descriptors_data = []
     
     students = Student.query.filter_by(class_id=class_id, user_id=user.id).all()
     
-    min_distance = float('inf')
-    matched_student = None
+    results = []
+    matched_ids = set()
     
-    for student in students:
-        if student.face_descriptor:
-            stored_descriptor = np.frombuffer(student.face_descriptor, dtype=np.float32)
-            stored_descriptor = stored_descriptor / (np.linalg.norm(stored_descriptor) + 1e-8)
-            distance = np.linalg.norm(descriptor - stored_descriptor)
-            print(f'[RecognizeFace] {student.name} distance={distance:.4f}')
-            if distance < min_distance and distance < 0.6:
-                min_distance = distance
-                matched_student = student
+    for desc_idx, desc_raw in enumerate(descriptors_data):
+        if desc_raw is None:
+            continue
+        descriptor = np.array(desc_raw, dtype=np.float32)
+        descriptor = descriptor / (np.linalg.norm(descriptor) + 1e-8)
+        
+        min_distance = float('inf')
+        matched_student = None
+        
+        for student in students:
+            if student.id in matched_ids:
+                continue
+            if student.face_descriptor:
+                stored_descriptor = np.frombuffer(student.face_descriptor, dtype=np.float32)
+                stored_descriptor = stored_descriptor / (np.linalg.norm(stored_descriptor) + 1e-8)
+                distance = np.linalg.norm(descriptor - stored_descriptor)
+                print(f'[RecognizeFace] face_{desc_idx} {student.name} distance={distance:.4f}')
+                if distance < min_distance and distance < 0.6:
+                    min_distance = distance
+                    matched_student = student
+        
+        if matched_student and matched_student.id not in matched_ids:
+            matched_ids.add(matched_student.id)
+            print(f'[RecognizeFace] face_{desc_idx} 匹配成功: {matched_student.name} (distance={min_distance:.4f})')
+            today = date.today()
+            existing = Attendance.query.filter(
+                Attendance.student_id == matched_student.id,
+                Attendance.user_id == user.id,
+                db.func.date(Attendance.check_in_time) == today
+            ).first()
+            
+            if existing:
+                results.append({
+                    'student_id': matched_student.id,
+                    'student_name': matched_student.name,
+                    'checked_in': False,
+                    'already_attended': True,
+                    'message': matched_student.name + ' 今日已签到'
+                })
+            else:
+                attendance = Attendance(
+                    student_id=matched_student.id,
+                    class_id=class_id,
+                    course_id=course_id,
+                    method='face_frontend',
+                    user_id=user.id
+                )
+                db.session.add(attendance)
+                db.session.commit()
+                results.append({
+                    'student_id': matched_student.id,
+                    'student_name': matched_student.name,
+                    'checked_in': True,
+                    'message': matched_student.name + ' 签到成功'
+                })
     
-    if matched_student:
-        print(f'[RecognizeFace] 匹配成功: {matched_student.name} (distance={min_distance:.4f})')
-        today = date.today()
-        existing = Attendance.query.filter(
-            Attendance.student_id == matched_student.id,
-            Attendance.user_id == user.id,
-            db.func.date(Attendance.check_in_time) == today
-        ).first()
-        
-        if existing:
-            return jsonify({'success': True, 'message': matched_student.name + ' 今日已签到', 'student_id': matched_student.id})
-        
-        attendance = Attendance(
-            student_id=matched_student.id,
-            class_id=class_id,
-            course_id=course_id,
-            method='face',
-            user_id=user.id
-        )
-        db.session.add(attendance)
-        db.session.commit()
-        
-        return jsonify({'success': True, 'message': matched_student.name + ' 签到成功', 'student_id': matched_student.id})
+    if results:
+        return jsonify({'success': True, 'results': results})
     else:
         return jsonify({'success': False, 'message': '未识别到匹配的学生'})
 
@@ -1002,45 +1117,78 @@ def recognize_frame():
             'matched': []
         })
     
-    # 处理第一个匹配（多人场景后续可扩展）
-    match = recognized[0]
-    matched_student = Student.query.filter_by(id=match['student_id'], user_id=user.id).first()
-    
-    if not matched_student:
-        return jsonify({'success': False, 'message': '学生不存在'})
-    
-    today = date.today()
-    existing = Attendance.query.filter(
-        Attendance.student_id == matched_student.id,
-        Attendance.user_id == user.id,
-        db.func.date(Attendance.check_in_time) == today
-    ).first()
-    
-    if existing:
-        return jsonify({
-            'success': True,
-            'already_attended': True,
-            'message': f'{matched_student.name} 今日已签到',
+    # 处理所有匹配的人脸
+    results = []
+    for match in recognized:
+        matched_student = Student.query.filter_by(id=match['student_id'], user_id=user.id).first()
+        if not matched_student:
+            results.append({
+                'student_id': match['student_id'],
+                'student_name': 'Unknown',
+                'checked_in': False,
+                'message': 'Student not found',
+                'bbox': match['bbox'],
+                'liveness': match.get('liveness', False)
+            })
+            continue
+        
+        is_live = match.get('liveness', False)
+        
+        today = date.today()
+        existing = Attendance.query.filter(
+            Attendance.student_id == matched_student.id,
+            Attendance.user_id == user.id,
+            db.func.date(Attendance.check_in_time) == today
+        ).first()
+        
+        if existing:
+            results.append({
+                'student_id': matched_student.id,
+                'student_name': matched_student.name,
+                'checked_in': False,
+                'already_attended': True,
+                'message': f'{matched_student.name} already checked in today',
+                'bbox': match['bbox'],
+                'liveness': is_live
+            })
+            continue
+        
+        if not is_live:
+            results.append({
+                'student_id': matched_student.id,
+                'student_name': matched_student.name,
+                'checked_in': False,
+                'message': f'{matched_student.name} matched but liveness not verified',
+                'bbox': match['bbox'],
+                'liveness': False,
+                'nose_frames': match.get('nose_frames', 0)
+            })
+            continue
+        
+        attendance = Attendance(
+            student_id=matched_student.id,
+            class_id=class_id,
+            course_id=course_id,
+            method='face_backend',
+            user_id=user.id
+        )
+        db.session.add(attendance)
+        db.session.commit()
+        
+        results.append({
             'student_id': matched_student.id,
             'student_name': matched_student.name,
-            'matched': [{'student_id': m['student_id'], 'bbox': m['bbox']} for m in recognized]
+            'checked_in': True,
+            'message': f'{matched_student.name} checked in successfully',
+            'bbox': match['bbox'],
+            'liveness': True,
+            'nose_frames': match.get('nose_frames', 0)
         })
-    
-    attendance = Attendance(
-        student_id=matched_student.id,
-        class_id=class_id,
-        course_id=course_id,
-        method='face',
-        user_id=user.id
-    )
-    db.session.add(attendance)
-    db.session.commit()
     
     return jsonify({
         'success': True,
-        'message': f'{matched_student.name} 签到成功',
-        'student_id': matched_student.id,
-        'student_name': matched_student.name,
+        'results': results,
+        'face_count': face_count,
         'liveness': liveness_ok,
         'nose_frames': nose_frames,
         'matched': [{'student_id': m['student_id'], 'bbox': m['bbox']} for m in recognized]
@@ -1051,6 +1199,7 @@ def reset_liveness():
     if 'user_id' not in session:
         return jsonify({'success': False, 'error': '未登录'})
     get_liveness_tracker().reset()
+    get_liveness_pool().reset()
     print('[Liveness] 活体追踪器已重置')
     return jsonify({'success': True})
 
@@ -1384,90 +1533,21 @@ def super_admin_dashboard():
     if session.get('role') != 'super_admin':
         return redirect(url_for('login'))
     
-    all_users = User.query.all()
-    
-    total_users = len(all_users)
-    total_classes = 0
-    total_students = 0
-    total_attendances = 0
-    today_total_attendance = 0
-    
-    all_attendances = []
-    all_classes = []
-    
-    for user in all_users:
-        total_classes += len(user.classes)
-        total_students += len(user.students)
-        total_attendances += len(user.attendances)
-        all_attendances.extend(user.attendances)
-        all_classes.extend(user.classes)
+    total_users = User.query.count()
+    total_classes = Class.query.count()
+    total_students = Student.query.count()
     
     today = datetime.now().date()
-    today_attendances = [a for a in all_attendances if a.check_in_time and a.check_in_time.date() == today]
-    today_total_attendance = len(today_attendances)
+    today_total_attendance = Attendance.query.filter(
+        db.func.date(Attendance.check_in_time) == today
+    ).count()
     
-    avg_students_per_class = total_students / total_classes if total_classes > 0 else 0
-    
-    from collections import defaultdict
-    
-    user_stats = []
-    for user in all_users:
-        user_attendances = Attendance.query.filter_by(user_id=user.id).all()
-        today_user_attendances = [a for a in user_attendances if a.check_in_time and a.check_in_time.date() == today]
-        
-        student_attendance_rate = 0
-        if len(user.students) > 0:
-            attended_students = len(set([a.student_id for a in today_user_attendances]))
-            student_attendance_rate = (attended_students / len(user.students)) * 100
-        
-        user_stats.append({
-            'id': user.id,
-            'username': user.username,
-            'name': user.name,
-            'class_count': len(user.classes),
-            'student_count': len(user.students),
-            'attendance_count': len(user_attendances),
-            'today_attendance': len(today_user_attendances),
-            'attendance_rate': round(student_attendance_rate, 1)
-        })
-    
-    class_stats = []
-    for cls in all_classes:
-        class_attendances = Attendance.query.filter_by(class_id=cls.id).all()
-        today_class_attendances = [a for a in class_attendances if a.check_in_time and a.check_in_time.date() == today]
-        
-        class_stats.append({
-            'id': cls.id,
-            'name': cls.name,
-            'grade': cls.grade,
-            'student_count': len(cls.students),
-            'total_attendances': len(class_attendances),
-            'today_attendance': len(today_class_attendances),
-            'admin_name': cls.user.name if cls.user else '未知'
-        })
-    
-    date_attendance = defaultdict(int)
-    for attendance in all_attendances:
-        if attendance.check_in_time:
-            date_str = attendance.check_in_time.strftime('%Y-%m-%d')
-            date_attendance[date_str] += 1
-    
-    date_list = sorted(date_attendance.keys())[-7:]
-    date_data = [{'date': d, 'count': date_attendance[d]} for d in date_list]
-    
-    max_count = max((item['count'] for item in date_data), default=1)
-    
-    return render_template('super_admin.html', 
+    return render_template('super_admin.html',
+                          today=today,
                           total_users=total_users,
                           total_classes=total_classes,
                           total_students=total_students,
-                          total_attendances=total_attendances,
-                          today_total_attendance=today_total_attendance,
-                          avg_students_per_class=round(avg_students_per_class, 1),
-                          user_stats=user_stats,
-                          class_stats=class_stats,
-                          date_data=date_data,
-                          max_count=max_count)
+                          today_total_attendance=today_total_attendance)
 
 @app.route('/api/get_qrcode/<token>')
 def get_qrcode(token):
@@ -1785,6 +1865,234 @@ def get_statistics(class_id):
         })
     except Exception as e:
         return jsonify({'success': False, 'error': '获取统计数据失败'})
+
+# ============================================================
+# Super Admin Management APIs
+# ============================================================
+
+def super_admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if session.get('role') != 'super_admin':
+            return jsonify({'success': False, 'error': 'Permission denied'})
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/api/super_admin/get_all_users')
+@super_admin_required
+def get_all_users():
+    users = User.query.all()
+    result = []
+    for u in users:
+        result.append({
+            'id': u.id,
+            'username': u.username,
+            'name': u.name,
+            'role': u.role,
+            'class_count': len(u.classes),
+            'student_count': len(u.students)
+        })
+    return jsonify({'success': True, 'users': result})
+
+@app.route('/api/super_admin/add_user', methods=['POST'])
+@super_admin_required
+def add_user():
+    data = request.json
+    username = data.get('username', '').strip()
+    name = data.get('name', '').strip()
+    password = data.get('password', '')
+    role = data.get('role', 'teacher')
+    
+    if not username or not name or not password:
+        return jsonify({'success': False, 'message': 'Please fill in all fields'})
+    
+    if len(password) < 6:
+        return jsonify({'success': False, 'message': 'Password must be at least 6 characters'})
+    
+    if User.query.filter_by(username=username).first():
+        return jsonify({'success': False, 'message': 'Username already exists'})
+    
+    if role not in ('teacher', 'super_admin'):
+        role = 'teacher'
+    
+    new_user = User(
+        username=username,
+        name=name,
+        password_hash=generate_password_hash(password),
+        role=role
+    )
+    db.session.add(new_user)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'User created'})
+
+@app.route('/api/super_admin/edit_user/<int:user_id>', methods=['POST'])
+@super_admin_required
+def edit_user(user_id):
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'success': False, 'message': 'User not found'})
+    
+    if user.id == session.get('user_id'):
+        return jsonify({'success': False, 'message': 'Cannot modify your own account'})
+    
+    data = request.json
+    username = data.get('username', '').strip()
+    name = data.get('name', '').strip()
+    role = data.get('role', 'teacher')
+    
+    if not username or not name:
+        return jsonify({'success': False, 'message': 'Please fill in all fields'})
+    
+    existing = User.query.filter_by(username=username).first()
+    if existing and existing.id != user.id:
+        return jsonify({'success': False, 'message': 'Username already exists'})
+    
+    if role not in ('teacher', 'super_admin'):
+        role = 'teacher'
+    
+    user.username = username
+    user.name = name
+    user.role = role
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'User updated'})
+
+@app.route('/api/super_admin/delete_user/<int:user_id>', methods=['POST'])
+@super_admin_required
+def delete_user(user_id):
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'success': False, 'message': 'User not found'})
+    
+    if user.id == session.get('user_id'):
+        return jsonify({'success': False, 'message': 'Cannot delete your own account'})
+    
+    Student.query.filter_by(user_id=user.id).delete()
+    Attendance.query.filter_by(user_id=user.id).delete()
+    PendingAttendance.query.filter_by(user_id=user.id).delete()
+    Course.query.filter_by(user_id=user.id).delete()
+    Class.query.filter_by(user_id=user.id).delete()
+    db.session.delete(user)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'User deleted'})
+
+@app.route('/api/super_admin/reset_user_password/<int:user_id>', methods=['POST'])
+@super_admin_required
+def reset_user_password(user_id):
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'success': False, 'message': 'User not found'})
+    
+    data = request.json
+    new_password = data.get('password', '')
+    
+    if len(new_password) < 6:
+        return jsonify({'success': False, 'message': 'Password must be at least 6 characters'})
+    
+    user.password_hash = generate_password_hash(new_password)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Password reset successfully'})
+
+@app.route('/api/super_admin/get_all_data')
+@super_admin_required
+def get_all_data():
+    all_users = User.query.all()
+    all_classes = Class.query.all()
+    all_students = Student.query.all()
+    
+    users_data = [{
+        'id': u.id, 'username': u.username, 'name': u.name, 'role': u.role,
+        'class_count': len(u.classes), 'student_count': len(u.students)
+    } for u in all_users]
+    
+    classes_data = [{
+        'id': c.id, 'name': c.name, 'grade': c.grade or '',
+        'user_id': c.user_id, 'admin_name': c.user.name if c.user else 'Unknown',
+        'student_count': len(c.students)
+    } for c in all_classes]
+    
+    students_data = [{
+        'id': s.id, 'name': s.name, 'student_id': s.student_id,
+        'class_id': s.class_id, 'user_id': s.user_id,
+        'class_name': s.class_ref.name if s.class_ref else 'Unknown',
+        'admin_name': s.user.name if s.user else 'Unknown',
+        'has_face': s.face_descriptor is not None
+    } for s in all_students]
+    
+    return jsonify({
+        'success': True,
+        'users': users_data,
+        'classes': classes_data,
+        'students': students_data
+    })
+
+@app.route('/api/super_admin/add_student', methods=['POST'])
+@super_admin_required
+def super_admin_add_student():
+    data = request.json
+    name = data.get('name', '').strip()
+    student_id = data.get('student_id', '').strip()
+    class_id = data.get('class_id', 0)
+    user_id = data.get('user_id', 0)
+    
+    if not name or not student_id or not class_id or not user_id:
+        return jsonify({'success': False, 'message': 'Please fill in all fields'})
+    
+    cls = Class.query.get(class_id)
+    if not cls:
+        return jsonify({'success': False, 'message': 'Class not found'})
+    
+    admin_user = User.query.get(user_id)
+    if not admin_user:
+        return jsonify({'success': False, 'message': 'Admin user not found'})
+    
+    existing = Student.query.filter_by(student_id=student_id, user_id=user_id).first()
+    if existing:
+        return jsonify({'success': False, 'message': 'Student ID already exists under this admin'})
+    
+    new_student = Student(
+        name=name,
+        student_id=student_id,
+        class_id=class_id,
+        user_id=user_id
+    )
+    db.session.add(new_student)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Student added'})
+
+@app.route('/api/super_admin/edit_student/<int:student_id>', methods=['POST'])
+@super_admin_required
+def super_admin_edit_student(student_id):
+    student = Student.query.get(student_id)
+    if not student:
+        return jsonify({'success': False, 'message': 'Student not found'})
+    
+    data = request.json
+    student.name = data.get('name', student.name).strip()
+    student.student_id = data.get('student_id', student.student_id).strip()
+    student.class_id = data.get('class_id', student.class_id)
+    student.user_id = data.get('user_id', student.user_id)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Student updated'})
+
+@app.route('/api/super_admin/delete_student/<int:student_id>', methods=['POST'])
+@super_admin_required
+def super_admin_delete_student(student_id):
+    student = Student.query.get(student_id)
+    if not student:
+        return jsonify({'success': False, 'message': 'Student not found'})
+    
+    Attendance.query.filter_by(student_id=student_id).delete()
+    PendingAttendance.query.filter_by(student_id=student_id).delete()
+    db.session.delete(student)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Student deleted'})
 
 if __name__ == '__main__':
     debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
