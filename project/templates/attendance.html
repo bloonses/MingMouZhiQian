@@ -389,7 +389,7 @@ function showSuccessOverlay(name) {
     const overlay = document.getElementById('successOverlay');
     document.getElementById('popupName').textContent = name;
     overlay.classList.add('show');
-    setTimeout(() => overlay.classList.remove('show'), 2800);
+    setTimeout(() => overlay.classList.remove('show'), 1000);
     
     const cam = document.getElementById('cameraSection');
     cam.classList.add('flash-success');
