@@ -352,9 +352,10 @@
 
 <div class="success-overlay" id="successOverlay">
     <div class="success-popup">
-        <div class="check-icon">&check;</div>
-        <h2 id="popupName"></h2>
-        <p id="successTime" style="font-family:'JetBrains Mono',monospace;"></p>
+        <div class="check-icon" id="popupIcon">&check;</div>
+        <h2 id="popupTitle">签到成功</h2>
+        <div class="multi-cards" id="popupCards"></div>
+        <p id="successTime" style="font-family:'JetBrains Mono',monospace;margin-top:12px;"></p>
     </div>
 </div>
 
@@ -369,8 +370,6 @@ const MODEL_URL = '/static/models';
 let stream = null;
 let modelsLoaded = false;
 let videoReady = false;
-let faceMatcher = null;
-let labeledDescriptors = [];
 let currentClassId = null;
 let currentCourseId = null;
 let lastRecognitionTime = 0;
@@ -385,11 +384,77 @@ const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 let ctx = null;
 
+function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+
 function showSuccessOverlay(name) {
+    showMultiSuccessOverlay([{ student_name: name, checked_in: true, message: name + ' 签到成功' }]);
+}
+
+function showMultiSuccessOverlay(results) {
     const overlay = document.getElementById('successOverlay');
-    document.getElementById('popupName').textContent = name;
+    const title = document.getElementById('popupTitle');
+    const icon = document.getElementById('popupIcon');
+    const cards = document.getElementById('popupCards');
+    const timeEl = document.getElementById('successTime');
+    
+    const checkedIn = results.filter(r => r.checked_in);
+    const already = results.filter(r => r.already_attended);
+    const failed = results.filter(r => !r.checked_in && !r.already_attended);
+    
+    if (checkedIn.length > 0) {
+        icon.innerHTML = '&check;';
+        icon.style.borderColor = 'var(--brand)';
+        icon.style.color = 'var(--brand)';
+        icon.style.boxShadow = '0 0 24px var(--brand-glow), inset 0 0 24px rgba(0, 255, 136, 0.1)';
+        title.textContent = checkedIn.length + ' 人签到成功';
+    } else if (already.length > 0) {
+        icon.innerHTML = '&#9888;';
+        icon.style.borderColor = '#f59e0b';
+        icon.style.color = '#f59e0b';
+        icon.style.boxShadow = '0 0 24px rgba(245, 158, 11, 0.4), inset 0 0 24px rgba(245, 158, 11, 0.1)';
+        title.textContent = '今日已签到';
+    } else {
+        icon.innerHTML = '&#10007;';
+        icon.style.borderColor = '#ef4444';
+        icon.style.color = '#ef4444';
+        icon.style.boxShadow = '0 0 24px rgba(239, 68, 68, 0.4), inset 0 0 24px rgba(239, 68, 68, 0.1)';
+        title.textContent = '签到失败';
+    }
+    
+    timeEl.textContent = new Date().toLocaleTimeString();
+    
+    let cardsHtml = '';
+    const allResults = [...checkedIn, ...already, ...failed];
+    
+    allResults.forEach((r, i) => {
+        let cardClass = 'student-card';
+        let statusIcon = '';
+        if (r.checked_in) {
+            cardClass += '';
+            statusIcon = '<span style="color:var(--brand);font-size:11px;display:block;margin-top:2px;">&#10003; 签到成功</span>';
+        } else if (r.already_attended) {
+            cardClass += ' card-already';
+            statusIcon = '<span style="color:#f59e0b;font-size:11px;display:block;margin-top:2px;">&#9888; 已签到</span>';
+        } else {
+            cardClass += ' card-failed';
+            statusIcon = '<span style="color:#ef4444;font-size:11px;display:block;margin-top:2px;">&#10007; 未通过</span>';
+        }
+        const name = r.student_name || (r.message || '').split(' ')[0];
+        const sid = r.student_id || '';
+        cardsHtml += `
+            <div class="${cardClass}" style="animation-delay:${i * 0.12}s">
+                <div class="card-avatar">${name[0] || '?'}</div>
+                <div class="card-name">${escapeHtml(name)}</div>
+                <div class="card-id">${escapeHtml(String(sid))}</div>
+                ${statusIcon}
+            </div>`;
+    });
+    
+    cards.innerHTML = cardsHtml;
     overlay.classList.add('show');
-    setTimeout(() => overlay.classList.remove('show'), 1000);
+    
+    const duration = Math.max(3000, allResults.length * 800);
+    setTimeout(() => overlay.classList.remove('show'), duration);
     
     const cam = document.getElementById('cameraSection');
     cam.classList.add('flash-success');
@@ -438,30 +503,6 @@ async function loadStudents(classId) {
         document.getElementById('counter').textContent = attended.length;
 
         renderStudentList(students);
-        // 构建前端匹配器
-        labeledDescriptors = [];
-        for (const s of students) {
-            if (s.face_descriptor && Array.isArray(s.face_descriptor) && s.face_descriptor.length > 0) {
-                try {
-                    const fd = new Float32Array(s.face_descriptor);
-                    const ld = new faceapi.LabeledFaceDescriptors(s.id.toString(), [fd]);
-                    labeledDescriptors.push(ld);
-                } catch (e) {
-                    showDebug('构建人脸特征失败: ' + e.message, 'error');
-                }
-            }
-        }
-        if (labeledDescriptors.length > 0) {
-            try {
-                faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.55);
-                showDebug('前端 FaceMatcher 已构建，学生特征数量: ' + labeledDescriptors.length, 'success');
-            } catch (e) {
-                showDebug('创建 FaceMatcher 失败: ' + e.message, 'error');
-                faceMatcher = null;
-            }
-        } else {
-            faceMatcher = null;
-        }
         updateRecentList(attended);
         document.getElementById('clearBtn').style.display = attended.length > 0 ? 'inline-flex' : 'none';
         return students;
@@ -618,18 +659,28 @@ async function processFrame() {
             const now = Date.now();
             if (now - lastRecognitionTime >= 2000) {
                 const result = await tryRecognizeFrameBackend();
-                if (result && result.success && !result.already_attended) {
-                    const name = result.student_name || result.message.split(' ')[0];
-                    const studentId = result.student_id;
-                    if (!attendedStudents.has(studentId)) {
-                        attendedStudents.add(studentId);
-                        showSuccessOverlay(name);
-                        document.getElementById('status').textContent = name + ' 已签到';
+                if (result && result.success && result.results) {
+                    let hasNewCheckin = false;
+                    const checkedResults = [];
+                    
+                    for (const r of result.results) {
+                        if (r.checked_in && !attendedStudents.has(r.student_id)) {
+                            attendedStudents.add(r.student_id);
+                            hasNewCheckin = true;
+                        }
+                        checkedResults.push(r);
+                    }
+                    
+                    if (hasNewCheckin) {
+                        showMultiSuccessOverlay(checkedResults);
+                        document.getElementById('status').textContent = checkedResults.filter(r => r.checked_in).length + ' 人已签到';
                         lastRecognitionTime = now;
                         await loadStudents(currentClassId);
+                    } else if (checkedResults.some(r => r.already_attended)) {
+                        document.getElementById('status').textContent = '今日已签到';
+                    } else if (checkedResults.some(r => !r.checked_in && !r.already_attended)) {
+                        document.getElementById('status').textContent = '等待活体验证...';
                     }
-                } else if (result && result.already_attended) {
-                    document.getElementById('status').textContent = result.message;
                 } else if (result && !result.success) {
                     document.getElementById('status').textContent = result.message || '等待检测...';
                 }
@@ -651,42 +702,56 @@ async function processFrame() {
             if (detections.length > 0) {
                 faceapi.draw.drawDetections(canvas, detections);
                 faceapi.draw.drawFaceLandmarks(canvas, detections);
+                
                 let nodTriggered = false;
+                const nodDescriptors = [];
+                
                 for (let i = 0; i < detections.length; i++) {
                     const det = detections[i];
-                    if (!det || !det.landmarks || !det.descriptor) continue;
+                    if (!det || !det.landmarks) continue;
                     const faceId = `face_${i}`;
-                    if (detectNod(faceId, det.landmarks) || true) {
-                        // 只要检测到人脸描述符就尝试匹配（点头仍作为辅助）
-                        if (!faceMatcher) continue;
-                        const match = faceMatcher.findBestMatch(det.descriptor);
-                        if (match && match.label && match.label !== 'unknown') {
-                            const studentId = parseInt(match.label);
-                            const now = Date.now();
-                            if (now - lastRecognitionTime < 1000) continue; // 简单节流
-                            try {
-                                const res = await fetch('/api/record_attendance', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ student_id: studentId, class_id: currentClassId, course_id: currentCourseId, method: 'face' })
-                                });
-                                const result = await res.json();
-                                if (result.success) {
-                                    if (!attendedStudents.has(studentId)) {
-                                        attendedStudents.add(studentId);
-                                        showSuccessOverlay(result.message.split(' ')[0]);
-                                        document.getElementById('status').textContent = result.message;
-                                        lastRecognitionTime = now;
-                                        await loadStudents(currentClassId);
-                                    }
-                                } else {
-                                    document.getElementById('status').textContent = result.message || '未匹配';
-                                    showDebug('记录签到失败: ' + (result.message || '未知'), 'error');
-                                }
-                            } catch (err) { showDebug('记录签到 API 错误: ' + err.message, 'error'); }
-                        }
+                    if (detectNod(faceId, det.landmarks) && det.descriptor) {
+                        nodTriggered = true;
+                        lastNodTime = Date.now();
+                        nodDescriptors.push(Array.from(det.descriptor));
                     }
                 }
+                
+                if (nodTriggered && nodDescriptors.length > 0 && Date.now() - lastRecognitionTime > 5000) {
+                    const now = Date.now();
+                    try {
+                        const response = await fetch('/api/recognize_face', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ class_id: currentClassId, course_id: currentCourseId, descriptors: nodDescriptors })
+                        });
+                        if (!response.ok) throw new Error('HTTP ' + response.status);
+                        const result = await response.json();
+                        if (result.success && result.results) {
+                            let hasNewCheckin = false;
+                            const checkedResults = [];
+                            for (const r of result.results) {
+                                if (r.checked_in && !attendedStudents.has(r.student_id)) {
+                                    attendedStudents.add(r.student_id);
+                                    hasNewCheckin = true;
+                                }
+                                checkedResults.push(r);
+                            }
+                            if (hasNewCheckin) {
+                                showMultiSuccessOverlay(checkedResults);
+                                document.getElementById('status').textContent = checkedResults.filter(r => r.checked_in).length + ' 人已签到';
+                                lastRecognitionTime = now;
+                                await loadStudents(currentClassId);
+                            } else if (checkedResults.some(r => r.already_attended)) {
+                                document.getElementById('status').textContent = '该学生今日已签到';
+                            }
+                        } else {
+                            document.getElementById('status').textContent = result.message || '未匹配';
+                            showDebug('识别失败: ' + (result.message || '未知'), 'error');
+                        }
+                    } catch (err) { showDebug('API错误: ' + err.message, 'error'); }
+                }
+                
                 // 回退机制：8秒内无点头，但检测到人脸，自动尝试识别
                 if (!nodTriggered && detections[0].descriptor && Date.now() - lastNodTime > 8000 && Date.now() - lastRecognitionTime > 5000) {
                     const now = Date.now();
@@ -699,15 +764,23 @@ async function processFrame() {
                         });
                         if (!response.ok) throw new Error('HTTP ' + response.status);
                         const result = await response.json();
-                        if (result.success) {
-                            const name = result.message.split(' ')[0];
-                            const studentId = result.student_id;
-                            if (!attendedStudents.has(studentId)) {
-                                attendedStudents.add(studentId);
-                                showSuccessOverlay(name);
-                                document.getElementById('status').textContent = name + ' 已签到';
+                        if (result.success && result.results) {
+                            let hasNewCheckin = false;
+                            const checkedResults = [];
+                            for (const r of result.results) {
+                                if (r.checked_in && !attendedStudents.has(r.student_id)) {
+                                    attendedStudents.add(r.student_id);
+                                    hasNewCheckin = true;
+                                }
+                                checkedResults.push(r);
+                            }
+                            if (hasNewCheckin) {
+                                showMultiSuccessOverlay(checkedResults);
+                                document.getElementById('status').textContent = checkedResults.filter(r => r.checked_in).length + ' 人已签到';
                                 lastRecognitionTime = now;
                                 await loadStudents(currentClassId);
+                            } else {
+                                document.getElementById('status').textContent = result.message || '未匹配';
                             }
                         } else {
                             document.getElementById('status').textContent = result.message || '未匹配';
@@ -755,11 +828,6 @@ async function onClassChange(newClassId) {
         camSection.classList.add('recording');
 
         if (!stream) {
-            if (!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') && typeof navigator.getUserMedia !== 'function') {
-                camSection.classList.remove('recording');
-                showDebug('摄像头不可用：浏览器或当前上下文不支持 getUserMedia（请使用 HTTPS 或在本机使用 localhost）', 'error');
-                document.getElementById('status').textContent = '摄像头不可用（仅 HTTPS/localhost）';
-            } else {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' } });
                 video.srcObject = stream;
@@ -777,12 +845,10 @@ async function onClassChange(newClassId) {
                         if (modelsLoaded) processFrame();
                     });
                 };
-                }
-                catch (err) {
-                    camSection.classList.remove('recording');
-                    showDebug('摄像头失败: ' + err.message, 'error');
-                    document.getElementById('status').textContent = '摄像头启动失败';
-                }
+            } catch (err) {
+                camSection.classList.remove('recording');
+                showDebug('摄像头失败: ' + err.message, 'error');
+                document.getElementById('status').textContent = '摄像头启动失败';
             }
         } else {
             document.getElementById('emptyVideoState').style.display = 'none';

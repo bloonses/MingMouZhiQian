@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>明眸智签 - 人脸识别考勤系统</title>
-    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700;800;900&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
@@ -712,9 +711,13 @@
         .success-overlay .success-popup {
             background: var(--bg-surface);
             border: 1px solid var(--border);
-            padding: 56px 72px;
+            padding: 40px 48px;
             text-align: center;
             position: relative;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
         }
 
         .success-overlay .success-popup .check-icon {
@@ -740,6 +743,73 @@
         .success-overlay .success-popup p {
             color: var(--text-secondary);
             font-size: 16px;
+        }
+
+        .success-overlay .success-popup .multi-cards {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .success-overlay .success-popup .student-card {
+            background: rgba(0, 255, 136, 0.06);
+            border: 1px solid rgba(0, 255, 136, 0.18);
+            padding: 16px 24px;
+            text-align: center;
+            min-width: 120px;
+            animation: cardPopIn 0.4s var(--ease-cut) both;
+        }
+
+        .success-overlay .success-popup .student-card .card-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--brand);
+            color: var(--bg-deep);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: 800;
+            margin: 0 auto 8px;
+        }
+
+        .success-overlay .success-popup .student-card .card-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .success-overlay .success-popup .student-card .card-id {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            margin-top: 2px;
+        }
+
+        .success-overlay .success-popup .student-card.card-already {
+            background: rgba(245, 158, 11, 0.06);
+            border-color: rgba(245, 158, 11, 0.18);
+        }
+
+        .success-overlay .success-popup .student-card.card-already .card-avatar {
+            background: #f59e0b;
+        }
+
+        .success-overlay .success-popup .student-card.card-failed {
+            background: rgba(239, 68, 68, 0.06);
+            border-color: rgba(239, 68, 68, 0.18);
+        }
+
+        .success-overlay .success-popup .student-card.card-failed .card-avatar {
+            background: #ef4444;
+        }
+
+        @keyframes cardPopIn {
+            from { opacity: 0; transform: scale(0.8) translateY(12px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
         }
 
         /* ===== Recent List ===== */
@@ -984,6 +1054,9 @@
             <a href="/records" class="{{ 'active' if request.path == '/records' else '' }}">记录</a>
             <a href="/qrcode_attendance" class="{{ 'active' if request.path == '/qrcode_attendance' else '' }}">二维码</a>
             <a href="/statistics" class="{{ 'active' if request.path == '/statistics' else '' }}">统计</a>
+            {% if user and user.role == 'super_admin' %}
+            <a href="/super_admin" class="{{ 'active' if request.path == '/super_admin' else '' }}">超级管理</a>
+            {% endif %}
         </nav>
 
         <div class="nav-right">
@@ -1004,5 +1077,7 @@
     <main class="content">
         {% block content %}{% endblock %}
     </main>
+
+    {% block extra_scripts %}{% endblock %}
 </body>
 </html>
