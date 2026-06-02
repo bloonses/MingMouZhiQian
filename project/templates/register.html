@@ -38,7 +38,9 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
+            /* 允许页面在内容超出视口时纵向滚动，避免下拉菜单或提示被遮挡 */
+            overflow-y: auto;
+            overflow-x: hidden;
             position: relative;
             -webkit-font-smoothing: antialiased;
         }
