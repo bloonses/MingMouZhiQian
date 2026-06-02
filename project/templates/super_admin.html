@@ -324,7 +324,10 @@
         <div class="section-header">
             <h3>管理员列表</h3>
             <div class="toolbar-inline">
-                <input type="text" placeholder="搜索..." oninput="filterUsers()" id="userSearch" style="width:140px;background-color: black; color: white; border: 1px solid #333;">
+                <input type="text" placeholder="搜索..." oninput="filterUsers()" id="userSearch" style="width:140px; background-color: #000000; color: white; 
+              border: 1px solid #4caf50; 
+              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
+              border-radius: 4px; padding: 4px 8px;">
                 <button class="btn btn-primary" onclick="openUserModal()">+ 添加</button>
                 <button class="btn btn-ghost" onclick="loadAllData()" title="刷新">&#x21bb; 刷新</button>
             </div>
@@ -352,7 +355,10 @@
         <div class="section-header">
             <h3>学生列表</h3>
             <div class="toolbar-inline">
-                <input type="text" placeholder="搜索..." oninput="filterStudents()" id="studentSearch" style="width:140px;">
+                <input type="text" placeholder="搜索..." oninput="filterStudents()" id="studentSearch" style="width:140px; background-color: #000000; color: white; 
+              border: 1px solid #4caf50; 
+              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
+              border-radius: 4px; padding: 4px 8px;">
                 <select id="filterAdmin" onchange="filterStudents()">
                     <option value="">全部管理员</option>
                 </select>
@@ -388,15 +394,24 @@
         <h3 id="userModalTitle">添加管理员</h3>
         <div class="field">
             <label>用户名</label>
-            <input type="text" id="userUsername" placeholder="请输入用户名">
+            <input type="text" id="userUsername" placeholder="请输入用户名" style="width:140px; background-color: #000000; color: white; 
+              border: 1px solid #4caf50; 
+              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
+              border-radius: 4px; padding: 4px 8px;">
         </div>
         <div class="field">
             <label>姓名</label>
-            <input type="text" id="userName" placeholder="请输入姓名">
+            <input type="text" id="userName" placeholder="请输入姓名" style="width:140px; background-color: #000000; color: white; 
+              border: 1px solid #4caf50; 
+              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
+              border-radius: 4px; padding: 4px 8px;">
         </div>
         <div class="field" id="userPasswordGroup">
             <label>密码</label>
-            <input type="password" id="userPassword" placeholder="至少6位字符">
+            <input type="password" id="userPassword" placeholder="至少6位字符" style="width:140px; background-color: #000000; color: white; 
+              border: 1px solid #4caf50; 
+              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
+              border-radius: 4px; padding: 4px 8px;">
         </div>
         <div class="field">
             <label>角色</label>
@@ -419,7 +434,10 @@
         <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:14px;" id="resetPwdUser"></p>
         <div class="field">
             <label>新密码</label>
-            <input type="password" id="resetPwdInput" placeholder="至少6位字符">
+            <input type="password" id="resetPwdInput" placeholder="至少6位字符" style="width:140px; background-color: #000000; color: white; 
+              border: 1px solid #4caf50; 
+              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
+              border-radius: 4px; padding: 4px 8px;">
         </div>
         <input type="hidden" id="resetPwdUserId">
         <div class="btn-row">
@@ -434,11 +452,17 @@
         <h3 id="studentModalTitle">添加学生</h3>
         <div class="field">
             <label>姓名</label>
-            <input type="text" id="studentName" placeholder="请输入学生姓名">
+            <input type="text" id="studentName" placeholder="请输入学生姓名" style="width:140px; background-color: #000000; color: white; 
+              border: 1px solid #4caf50; 
+              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
+              border-radius: 4px; padding: 4px 8px;">
         </div>
         <div class="field">
             <label>学号</label>
-            <input type="text" id="studentStudentId" placeholder="请输入学号">
+            <input type="text" id="studentStudentId" placeholder="请输入学号" style="width:140px; background-color: #000000; color: white; 
+              border: 1px solid #4caf50; 
+              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
+              border-radius: 4px; padding: 4px 8px;">
         </div>
         <div class="field">
             <label>所属管理员</label>
