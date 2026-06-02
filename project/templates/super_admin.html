@@ -1,780 +1,707 @@
-{% extends "base.html" %}
-
-{% block title %}超级管理 - 明眸智签{% endblock %}
-
-{% block extra_head %}
-<style>
-    .stats-row {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 16px;
-        margin-bottom: 24px;
-    }
-
-    @media (max-width: 768px) {
-        .stats-row { grid-template-columns: repeat(2, 1fr); }
-    }
-
-    .stat-card {
-        background: rgba(255,255,255,0.03);
-        border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 14px;
-        padding: 20px 24px;
-        transition: all 0.25s;
-    }
-
-    .stat-card:hover {
-        border-color: rgba(99,102,241,0.3);
-        background: rgba(99,102,241,0.05);
-    }
-
-    .stat-card .stat-label {
-        font-size: 0.8rem;
-        color: #94a3b8;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 6px;
-    }
-
-    .stat-card .stat-value {
-        font-size: 2rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #e2e8f0, #a5b4fc);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-    }
-
-    .stat-card .stat-sub {
-        font-size: 0.75rem;
-        color: #64748b;
-        margin-top: 4px;
-    }
-
-    .section-card {
-        background: rgba(255,255,255,0.02);
-        border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 16px;
-        overflow: hidden;
-        margin-bottom: 20px;
-    }
-
-    .section-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 16px 20px;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-
-    .section-header h3 {
-        font-size: 1rem;
-        font-weight: 700;
-        color: #e2e8f0;
-        margin: 0;
-    }
-
-    .section-body {
-        padding: 0;
-        overflow-x: auto;
-    }
-
-    .toolbar-inline {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-
-    .toolbar-inline input,
-    .toolbar-inline select {
-        padding: 7px 12px;
-        background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(255,255,255,0.12);
-        border-radius: 8px;
-        color: #e2e8f0;
-        font-size: 0.82rem;
-        outline: none;
-    }
-
-    .toolbar-inline input:focus,
-    .toolbar-inline select:focus {
-        border-color: #6366f1;
-    }
-
-    .btn {
-        padding: 7px 14px;
-        border: none;
-        border-radius: 8px;
-        font-size: 0.82rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.2s;
-        white-space: nowrap;
-    }
-
-    .btn-primary {
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        color: white;
-    }
-
-    .btn-primary:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 15px rgba(99,102,241,0.35);
-    }
-
-    .btn-danger {
-        background: rgba(239,68,68,0.18);
-        color: #fca5a5;
-        border: 1px solid rgba(239,68,68,0.25);
-    }
-
-    .btn-danger:hover { background: rgba(239,68,68,0.3); }
-
-    .btn-warning {
-        background: rgba(234,179,8,0.18);
-        color: #fde68a;
-        border: 1px solid rgba(234,179,8,0.25);
-    }
-
-    .btn-warning:hover { background: rgba(234,179,8,0.3); }
-
-    .btn-info {
-        background: rgba(59,130,246,0.18);
-        color: #93c5fd;
-        border: 1px solid rgba(59,130,246,0.25);
-    }
-
-    .btn-info:hover { background: rgba(59,130,246,0.3); }
-
-    .btn-ghost {
-        background: rgba(255,255,255,0.06);
-        color: #cbd5e1;
-    }
-
-    .btn-ghost:hover { background: rgba(255,255,255,0.12); }
-
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.84rem;
-    }
-
-    table th {
-        text-align: left;
-        padding: 11px 16px;
-        color: #64748b;
-        font-weight: 600;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
-        white-space: nowrap;
-        background: rgba(0,0,0,0.15);
-    }
-
-    table td {
-        padding: 10px 16px;
-        border-bottom: 1px solid rgba(255,255,255,0.03);
-        color: #cbd5e1;
-        white-space: nowrap;
-    }
-
-    table tbody tr:hover td {
-        background: rgba(255,255,255,0.02);
-    }
-
-    .badge {
-        display: inline-block;
-        padding: 2px 9px;
-        border-radius: 12px;
-        font-size: 0.72rem;
-        font-weight: 600;
-    }
-
-    .badge-super { background: rgba(139,92,246,0.2); color: #c4b5fd; }
-    .badge-admin { background: rgba(59,130,246,0.2); color: #93c5fd; }
-    .badge-yes   { background: rgba(34,197,94,0.2); color: #86efac; }
-    .badge-no    { background: rgba(148,163,184,0.12); color: #94a3b8; }
-
-    .state-msg {
-        text-align: center;
-        padding: 36px 20px;
-        font-size: 0.88rem;
-    }
-
-    .state-loading { color: #818cf8; }
-    .state-error   { color: #fca5a5; }
-    .state-empty   { color: #64748b; }
-
-    .modal-overlay {
-        display: none;
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,0.6);
-        z-index: 1000;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .modal-overlay.show { display: flex; }
-
-    .modal {
-        background: #1a1a2e;
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 16px;
-        padding: 28px;
-        width: 90%;
-        max-width: 460px;
-        max-height: 85vh;
-        overflow-y: auto;
-    }
-
-    .modal h3 {
-        font-size: 1.1rem;
-        margin-bottom: 18px;
-        color: #e2e8f0;
-    }
-
-    .modal .field {
-        margin-bottom: 14px;
-    }
-
-    .modal .field label {
-        display: block;
-        margin-bottom: 4px;
-        font-size: 0.82rem;
-        color: #94a3b8;
-        font-weight: 600;
-    }
-
-    .modal .field input,
-    .modal .field select {
-        width: 100%;
-        padding: 9px 12px;
-        background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(255,255,255,0.12);
-        border-radius: 10px;
-        color: #e2e8f0;
-        font-size: 0.88rem;
-        outline: none;
-        box-sizing: border-box;
-    }
-
-    .modal .field input:focus,
-    .modal .field select:focus {
-        border-color: #6366f1;
-    }
-
-    .modal .btn-row {
-        display: flex;
-        gap: 8px;
-        justify-content: flex-end;
-        margin-top: 18px;
-    }
-
-    .toast {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 12px 18px;
-        border-radius: 10px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        z-index: 2000;
-        opacity: 0;
-        transition: opacity 0.3s;
-    }
-
-    .toast.show { opacity: 1; }
-    .toast-success { background: rgba(34,197,94,0.9); color: white; }
-    .toast-error   { background: rgba(239,68,68,0.9); color: white; }
-</style>
-{% endblock %}
-
-{% block content %}
-<div class="container">
-    <h1 style="font-size:1.5rem;font-weight:700;margin-bottom:4px;">超级管理员后台</h1>
-    <p style="color:#94a3b8;font-size:0.9rem;margin-bottom:20px;">管理所有管理员、学生和系统数据</p>
-
-    <div class="stats-row">
-        <div class="stat-card">
-            <div class="stat-label">管理员总数</div>
-            <div class="stat-value">{{ total_users }}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">班级总数</div>
-            <div class="stat-value">{{ total_classes }}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">学生总数</div>
-            <div class="stat-value">{{ total_students }}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">今日签到</div>
-            <div class="stat-value">{{ today_total_attendance }}</div>
-            <div class="stat-sub">{{ today }}</div>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>超级管理员后台 - 明眸智签</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary-gradient: linear-gradient(135deg, #00ff88 0%, #00cc66 100%);
+            --accent-gradient: linear-gradient(135deg, #ff4444 0%, #cc3333 100%);
+            --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --warning-gradient: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            --info-gradient: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            --dark-bg: #050510;
+            --card-bg: rgba(0, 255, 136, 0.06);
+            --glass-bg: rgba(0, 255, 136, 0.08);
+            --border-color: rgba(0, 255, 136, 0.12);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --text-muted: rgba(255, 255, 255, 0.5);
+        }
+        
+        body {
+            font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--dark-bg);
+            min-height: 100vh;
+            overflow-x: hidden;
+            color: var(--text-primary);
+            position: relative;
+        }
+        
+        .bg-animated {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+        
+        .bg-animated::before {
+            content: '';
+            position: absolute;
+            width: 150%;
+            height: 150%;
+            top: -25%;
+            left: -25%;
+            background: radial-gradient(circle at 20% 80%, rgba(0, 255, 136, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(0, 204, 102, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 40% 40%, rgba(240, 147, 251, 0.1) 0%, transparent 40%);
+            animation: bgRotate 30s linear infinite;
+        }
+        
+        @keyframes bgRotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(60px);
+            opacity: 0.4;
+            animation: float 8s ease-in-out infinite;
+        }
+        
+        .orb-1 {
+            width: 400px;
+            height: 400px;
+            background: linear-gradient(135deg, #00ff88, #00cc66);
+            top: -100px;
+            left: -100px;
+        }
+        
+        .orb-2 {
+            width: 300px;
+            height: 300px;
+            background: linear-gradient(135deg, #f093fb, #ff4444);
+            bottom: -50px;
+            right: -50px;
+            animation-delay: -2s;
+        }
+        
+        .orb-3 {
+            width: 250px;
+            height: 250px;
+            background: linear-gradient(135deg, #11998e, #38ef7d);
+            top: 50%;
+            left: 50%;
+            animation-delay: -4s;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(30px, -30px) scale(1.05); }
+            50% { transform: translate(0, -50px) scale(1); }
+            75% { transform: translate(-30px, -30px) scale(0.95); }
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 40px;
+            background: rgba(5, 5, 16, 0.85);
+            border-bottom: 1px solid var(--border-color);
+            position: relative;
+            z-index: 100;
+        }
+        
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #00ff88;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .user-avatar {
+            width: 52px;
+            height: 52px;
+            background: var(--primary-gradient);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 700;
+            color: white;
+            box-shadow: 0 8px 24px rgba(0, 255, 136, 0.3);
+        }
+        
+        .logout-btn {
+            padding: 12px 28px;
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 15px;
+            font-family: 'JetBrains Mono', 'Noto Sans SC', monospace;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .logout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(235, 51, 73, 0.4);
+        }
+        
+        .content {
+            padding: 40px;
+            max-width: 1600px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+        
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0;
+            padding: 32px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: cardSlideIn 0.6s ease-out backwards;
+        }
+        
+        .stat-card:nth-child(1) { animation-delay: 0.1s; }
+        .stat-card:nth-child(2) { animation-delay: 0.15s; }
+        .stat-card:nth-child(3) { animation-delay: 0.2s; }
+        .stat-card:nth-child(4) { animation-delay: 0.25s; }
+        .stat-card:nth-child(5) { animation-delay: 0.3s; }
+        .stat-card:nth-child(6) { animation-delay: 0.35s; }
+        
+        @keyframes cardSlideIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--primary-gradient);
+        }
+        
+        .stat-card:nth-child(2)::before { background: var(--success-gradient); }
+        .stat-card:nth-child(3)::before { background: var(--accent-gradient); }
+        .stat-card:nth-child(4)::before { background: var(--warning-gradient); }
+        .stat-card:nth-child(5)::before { background: var(--info-gradient); }
+        .stat-card:nth-child(6)::before { background: linear-gradient(135deg, #00ff88, #f093fb); }
+        
+        .stat-card:hover {
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+            border-color: rgba(0, 255, 136, 0.3);
+        }
+        
+        .stat-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.12) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        
+        .stat-card:hover::after { opacity: 1; }
+        
+        .stat-card .icon {
+            font-size: 32px;
+            margin-bottom: 16px;
+            opacity: 0.8;
+        }
+        
+        .stat-card .value {
+            font-size: 52px;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', 'Noto Sans SC', monospace;
+            color: #00ff88;
+            line-height: 1;
+            margin-bottom: 8px;
+            animation: valueCount 1s ease-out;
+        }
+        
+        .stat-card:nth-child(2) .value { color: #38ef7d; }
+        .stat-card:nth-child(3) .value { color: #f093fb; }
+        .stat-card:nth-child(4) .value { color: #fee140; }
+        .stat-card:nth-child(5) .value { color: #fed6e3; }
+        
+        @keyframes valueCount {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .stat-card .label {
+            color: var(--text-secondary);
+            font-size: 15px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .section-title {
+            font-size: 26px;
+            font-weight: 700;
+            margin-bottom: 28px;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        
+        .section-title::after {
+            content: '';
+            flex: 1;
+            height: 2px;
+            background: var(--primary-gradient);
+            opacity: 0.3;
+        }
+        
+        .table-container {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0;
+            overflow: hidden;
+            margin-bottom: 40px;
+        }
+        
+        .table-header {
+            padding: 20px 24px;
+            background: var(--glass-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .table-header h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .data-table th,
+        .data-table td {
+            padding: 20px 24px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+        
+        .data-table th {
+            background: var(--glass-bg);
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            font-size: 13px;
+            letter-spacing: 1px;
+        }
+        
+        .data-table tr:hover {
+            background: rgba(0, 255, 136, 0.06);
+        }
+        
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .user-avatar-small {
+            width: 48px;
+            height: 48px;
+            background: var(--primary-gradient);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 18px;
+            box-shadow: 0 6px 20px rgba(0, 255, 136, 0.3);
+        }
+        
+        .badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .badge-success {
+            background: rgba(17, 153, 142, 0.2);
+            color: #38ef7d;
+        }
+        
+        .badge-info {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+        }
+        
+        .badge-warning {
+            background: rgba(254, 172, 94, 0.2);
+            color: #feca57;
+        }
+        
+        .badge-danger {
+            background: rgba(255, 68, 68, 0.2);
+            color: #ff4444;
+        }
+        
+        .chart-container {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0;
+            padding: 32px;
+            margin-bottom: 40px;
+        }
+        
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+        
+        .chart-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .chart {
+            height: 300px;
+            position: relative;
+        }
+        
+        .chart canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        
+        .bar-chart {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            height: 250px;
+            padding: 20px 0;
+        }
+        
+        .bar-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            max-width: 80px;
+        }
+        
+        .bar {
+            width: 40px;
+            background: var(--primary-gradient);
+            border-radius: 8px 8px 0 0;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+        
+        .bar:hover {
+            transform: scaleX(1.1);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+        }
+        
+        .bar-label {
+            color: var(--text-muted);
+            font-size: 12px;
+            text-align: center;
+        }
+        
+        .bar-value {
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px;
+            color: var(--text-muted);
+        }
+        
+        .empty-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                padding: 16px 20px;
+            }
+            
+            .header h1 {
+                font-size: 22px;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stat-card {
+                padding: 24px;
+            }
+            
+            .stat-card .value {
+                font-size: 40px;
+            }
+            
+            .data-table th,
+            .data-table td {
+                padding: 12px 16px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-animated"></div>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    
+    <div class="header">
+        <h1>
+            <span>👑</span>
+            <span>超级管理员后台</span>
+        </h1>
+        <div class="user-info">
+            <div class="user-avatar">👑</div>
+            <div>
+                <p style="font-weight: 600; font-size: 16px;">超级管理员</p>
+                <p style="font-size: 13px; color: var(--text-muted);">admin</p>
+            </div>
+            <a href="/logout" class="logout-btn">
+                <span>🚪</span>
+                <span>退出登录</span>
+            </a>
         </div>
     </div>
-
-    <div class="section-card">
-        <div class="section-header">
-            <h3>管理员列表</h3>
-            <div class="toolbar-inline">
-                <input type="text" placeholder="搜索..." oninput="filterUsers()" id="userSearch" style="width:140px; background-color: #000000; color: white; 
-              border: 1px solid #4caf50; 
-              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
-              border-radius: 4px; padding: 4px 8px;">
-                <button class="btn btn-primary" onclick="openUserModal()">+ 添加</button>
-                <button class="btn btn-ghost" onclick="loadAllData()" title="刷新">&#x21bb; 刷新</button>
+    
+    <div class="content">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="icon">👥</div>
+                <div class="value">{{ total_users }}</div>
+                <div class="label">管理员数量</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">🏫</div>
+                <div class="value">{{ total_classes }}</div>
+                <div class="label">班级总数</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">📚</div>
+                <div class="value">{{ total_students }}</div>
+                <div class="label">学生总数</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">✅</div>
+                <div class="value">{{ total_attendances }}</div>
+                <div class="label">签到记录总数</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">📅</div>
+                <div class="value">{{ today_total_attendance }}</div>
+                <div class="label">今日签到</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">📊</div>
+                <div class="value">{{ avg_students_per_class }}</div>
+                <div class="label">每班平均人数</div>
             </div>
         </div>
-        <div class="section-body">
-            <table>
-                <thead>
-                    <tr>
-                        <th>用户名</th>
-                        <th>姓名</th>
-                        <th>角色</th>
-                        <th>班级</th>
-                        <th>学生</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody id="usersTableBody">
-                    <tr><td colspan="6" class="state-msg state-loading">加载中...</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="section-card">
-        <div class="section-header">
-            <h3>学生列表</h3>
-            <div class="toolbar-inline">
-                <input type="text" placeholder="搜索..." oninput="filterStudents()" id="studentSearch" style="width:140px; background-color: #000000; color: white; 
-              border: 1px solid #4caf50; 
-              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
-              border-radius: 4px; padding: 4px 8px;">
-                <select id="filterAdmin" onchange="filterStudents()">
-                    <option value="">全部管理员</option>
-                </select>
-                <select id="filterClass" onchange="filterStudents()">
-                    <option value="">全部班级</option>
-                </select>
-                <button class="btn btn-primary" onclick="openStudentModal()">+ 添加</button>
-                <button class="btn btn-ghost" onclick="loadAllData()" title="刷新">&#x21bb; 刷新</button>
+        
+        <div class="chart-container">
+            <div class="chart-header">
+                <div class="chart-title">📈 近7天签到趋势</div>
+            </div>
+            <div class="bar-chart">
+                {% if date_data %}
+                    {% for item in date_data %}
+                    <div class="bar-wrapper">
+                        <div class="bar-value">{{ item.count }}</div>
+                        <div class="bar" style="height: {{ (item.count / max_count) * 200 }}px;"></div>
+                        <div class="bar-label">{{ item.date }}</div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state">
+                        <div class="empty-icon">📊</div>
+                        <p>暂无签到数据</p>
+                    </div>
+                {% endif %}
             </div>
         </div>
-        <div class="section-body">
-            <table>
-                <thead>
-                    <tr>
-                        <th>姓名</th>
-                        <th>学号</th>
-                        <th>班级</th>
-                        <th>管理员</th>
-                        <th>人脸</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody id="studentsTableBody">
-                    <tr><td colspan="6" class="state-msg state-loading">加载中...</td></tr>
-                </tbody>
-            </table>
+        
+        <h2 class="section-title">
+            <span>👤</span>
+            <span>管理员数据统计</span>
+        </h2>
+        
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>头像</th>
+                            <th>用户名</th>
+                            <th>姓名</th>
+                            <th>班级数</th>
+                            <th>学生数</th>
+                            <th>总签到</th>
+                            <th>今日签到</th>
+                            <th>出勤率</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if user_stats %}
+                            {% for user in user_stats %}
+                            <tr>
+                                <td><div class="user-avatar-small">{{ user.name[0] }}</div></td>
+                                <td><span style="color: #00ff88; font-weight: 500;">@{{ user.username }}</span></td>
+                                <td style="font-weight: 500;">{{ user.name }}</td>
+                                <td><span class="badge badge-info">{{ user.class_count }}</span></td>
+                                <td><span class="badge badge-success">{{ user.student_count }}</span></td>
+                                <td>{{ user.attendance_count }}</td>
+                                <td><span class="badge badge-success">{{ user.today_attendance }}</span></td>
+                                <td>
+                                    {% if user.attendance_rate >= 80 %}
+                                        <span class="badge badge-success">{{ user.attendance_rate }}%</span>
+                                    {% elif user.attendance_rate >= 50 %}
+                                        <span class="badge badge-warning">{{ user.attendance_rate }}%</span>
+                                    {% else %}
+                                        <span class="badge badge-danger">{{ user.attendance_rate }}%</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="8" class="empty-state">
+                                    <div class="empty-icon">👤</div>
+                                    <p>暂无管理员数据</p>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <h2 class="section-title">
+            <span>🏫</span>
+            <span>班级数据统计</span>
+        </h2>
+        
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>班级名称</th>
+                            <th>年级</th>
+                            <th>管理员</th>
+                            <th>学生数</th>
+                            <th>总签到</th>
+                            <th>今日签到</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if class_stats %}
+                            {% for cls in class_stats %}
+                            <tr>
+                                <td style="font-weight: 500;">{{ cls.name }}</td>
+                                <td>{{ cls.grade or '-' }}</td>
+                                <td><span class="badge badge-info">{{ cls.admin_name }}</span></td>
+                                <td>{{ cls.student_count }}</td>
+                                <td>{{ cls.total_attendances }}</td>
+                                <td><span class="badge badge-success">{{ cls.today_attendance }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="6" class="empty-state">
+                                    <div class="empty-icon">🏫</div>
+                                    <p>暂无班级数据</p>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>© 2026 明眸智签 - 人脸识别考勤系统 | 超级管理员后台</p>
+            <p style="margin-top: 8px; opacity: 0.7;">数据统计实时更新</p>
         </div>
     </div>
-</div>
-
-<div class="modal-overlay" id="userModal">
-    <div class="modal">
-        <h3 id="userModalTitle">添加管理员</h3>
-        <div class="field">
-            <label>用户名</label>
-            <input type="text" id="userUsername" placeholder="请输入用户名" style="width:140px; background-color: #000000; color: white; 
-              border: 1px solid #4caf50; 
-              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
-              border-radius: 4px; padding: 4px 8px;">
-        </div>
-        <div class="field">
-            <label>姓名</label>
-            <input type="text" id="userName" placeholder="请输入姓名" style="width:140px; background-color: #000000; color: white; 
-              border: 1px solid #4caf50; 
-              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
-              border-radius: 4px; padding: 4px 8px;">
-        </div>
-        <div class="field" id="userPasswordGroup">
-            <label>密码</label>
-            <input type="password" id="userPassword" placeholder="至少6位字符" style="width:140px; background-color: #000000; color: white; 
-              border: 1px solid #4caf50; 
-              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
-              border-radius: 4px; padding: 4px 8px;">
-        </div>
-        <div class="field">
-            <label>角色</label>
-            <select id="userRole">
-                <option value="teacher">普通管理员</option>
-                <option value="super_admin">超级管理员</option>
-            </select>
-        </div>
-        <input type="hidden" id="editUserId">
-        <div class="btn-row">
-            <button class="btn btn-ghost" onclick="closeUserModal()">取消</button>
-            <button class="btn btn-primary" onclick="saveUser()">保存</button>
-        </div>
-    </div>
-</div>
-
-<div class="modal-overlay" id="resetPwdModal">
-    <div class="modal">
-        <h3>重置密码</h3>
-        <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:14px;" id="resetPwdUser"></p>
-        <div class="field">
-            <label>新密码</label>
-            <input type="password" id="resetPwdInput" placeholder="至少6位字符" style="width:140px; background-color: #000000; color: white; 
-              border: 1px solid #4caf50; 
-              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
-              border-radius: 4px; padding: 4px 8px;">
-        </div>
-        <input type="hidden" id="resetPwdUserId">
-        <div class="btn-row">
-            <button class="btn btn-ghost" onclick="closeResetPwdModal()">取消</button>
-            <button class="btn btn-primary" onclick="confirmResetPassword()">重置</button>
-        </div>
-    </div>
-</div>
-
-<div class="modal-overlay" id="studentModal">
-    <div class="modal">
-        <h3 id="studentModalTitle">添加学生</h3>
-        <div class="field">
-            <label>姓名</label>
-            <input type="text" id="studentName" placeholder="请输入学生姓名" style="width:140px; background-color: #000000; color: white; 
-              border: 1px solid #4caf50; 
-              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
-              border-radius: 4px; padding: 4px 8px;">
-        </div>
-        <div class="field">
-            <label>学号</label>
-            <input type="text" id="studentStudentId" placeholder="请输入学号" style="width:140px; background-color: #000000; color: white; 
-              border: 1px solid #4caf50; 
-              box-shadow: 0 0 5px #4caf50, 0 0 2px #2e7d32; 
-              border-radius: 4px; padding: 4px 8px;">
-        </div>
-        <div class="field">
-            <label>所属管理员</label>
-            <select id="studentAdmin" onchange="loadClassesForAdmin()">
-                <option value="">选择管理员</option>
-            </select>
-        </div>
-        <div class="field">
-            <label>所属班级</label>
-            <select id="studentClass">
-                <option value="">选择班级</option>
-            </select>
-        </div>
-        <input type="hidden" id="editStudentId">
-        <div class="btn-row">
-            <button class="btn btn-ghost" onclick="closeStudentModal()">取消</button>
-            <button class="btn btn-primary" onclick="saveStudent()">保存</button>
-        </div>
-    </div>
-</div>
-
-<div class="toast" id="toast"></div>
-
-<script>
-let allUsers = [];
-let allStudents = [];
-let allClasses = [];
-
-function showToast(msg, type) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className = 'toast toast-' + type + ' show';
-    setTimeout(() => { t.className = 'toast'; }, 3000);
-}
-
-function setTableState(tableId, state, msg) {
-    const tbody = document.getElementById(tableId);
-    const cols = tableId === 'usersTableBody' ? 6 : 6;
-    tbody.innerHTML = '<tr><td colspan="' + cols + '" class="state-msg state-' + state + '">' + msg + '</td></tr>';
-}
-
-async function loadAllData() {
-    const userTbody = document.getElementById('usersTableBody');
-    const studentTbody = document.getElementById('studentsTableBody');
-    const cols = 6;
-    userTbody.innerHTML = '<tr><td colspan="' + cols + '" class="state-msg state-loading">加载中...</td></tr>';
-    studentTbody.innerHTML = '<tr><td colspan="' + cols + '" class="state-msg state-loading">加载中...</td></tr>';
-
-    try {
-        const res = await fetch('/api/super_admin/get_all_data');
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        if (data.success) {
-            allUsers = data.users || [];
-            allClasses = data.classes || [];
-            allStudents = data.students || [];
-            renderUsersTable(allUsers);
-            renderStudentsTable(allStudents);
-            populateAdminFilters();
-            populateClassFilter();
-        } else {
-            const err = data.error || '未知错误';
-            userTbody.innerHTML = '<tr><td colspan="' + cols + '" class="state-msg state-error">加载失败: ' + err + ' <button class="btn btn-info" onclick="loadAllData()">重试</button></td></tr>';
-            studentTbody.innerHTML = '<tr><td colspan="' + cols + '" class="state-msg state-error">加载失败 <button class="btn btn-info" onclick="loadAllData()">重试</button></td></tr>';
-        }
-    } catch (e) {
-        console.error('加载数据失败:', e);
-        userTbody.innerHTML = '<tr><td colspan="' + cols + '" class="state-msg state-error">网络错误，请检查服务器是否正常运行 <button class="btn btn-info" onclick="loadAllData()">重试</button></td></tr>';
-        studentTbody.innerHTML = '<tr><td colspan="' + cols + '" class="state-msg state-error">网络错误 <button class="btn btn-info" onclick="loadAllData()">重试</button></td></tr>';
-    }
-}
-
-function renderUsersTable(users) {
-    const tbody = document.getElementById('usersTableBody');
-    if (!users || !users.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="state-msg state-empty">暂无管理员数据</td></tr>';
-        return;
-    }
-    tbody.innerHTML = users.map(u => `
-        <tr>
-            <td><strong>${esc(u.username)}</strong></td>
-            <td>${esc(u.name)}</td>
-            <td><span class="badge ${u.role === 'super_admin' ? 'badge-super' : 'badge-admin'}">${u.role === 'super_admin' ? '超级管理员' : '普通管理员'}</span></td>
-            <td>${u.class_count || 0}</td>
-            <td>${u.student_count || 0}</td>
-            <td>
-                <button class="btn btn-warning" onclick="openUserModal(${u.id})">编辑</button>
-                <button class="btn btn-info" onclick="openResetPwdModal(${u.id},'${esc(u.username)}')">重置密码</button>
-                <button class="btn btn-danger" onclick="deleteUser(${u.id},'${esc(u.username)}')">删除</button>
-            </td>
-        </tr>
-    `).join('');
-}
-
-function renderStudentsTable(students) {
-    const tbody = document.getElementById('studentsTableBody');
-    if (!students || !students.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="state-msg state-empty">暂无学生数据</td></tr>';
-        return;
-    }
-    tbody.innerHTML = students.map(s => `
-        <tr>
-            <td><strong>${esc(s.name)}</strong></td>
-            <td>${esc(s.student_id)}</td>
-            <td>${esc(s.class_name)}</td>
-            <td>${esc(s.admin_name)}</td>
-            <td><span class="badge ${s.has_face ? 'badge-yes' : 'badge-no'}">${s.has_face ? '已采集' : '未采集'}</span></td>
-            <td>
-                <button class="btn btn-warning" onclick="openStudentModal(${s.id})">编辑</button>
-                <button class="btn btn-danger" onclick="deleteStudent(${s.id},'${esc(s.name)}')">删除</button>
-            </td>
-        </tr>
-    `).join('');
-}
-
-function populateAdminFilters() {
-    const filterSel = document.getElementById('filterAdmin');
-    const studentAdminSel = document.getElementById('studentAdmin');
-    const opts = '<option value="">全部管理员</option>' + allUsers.map(u => '<option value="' + u.id + '">' + esc(u.name) + ' (' + esc(u.username) + ')</option>').join('');
-    filterSel.innerHTML = opts;
-    studentAdminSel.innerHTML = '<option value="">选择管理员</option>' + allUsers.map(u => '<option value="' + u.id + '">' + esc(u.name) + ' (' + esc(u.username) + ')</option>').join('');
-}
-
-function populateClassFilter() {
-    const sel = document.getElementById('filterClass');
-    sel.innerHTML = '<option value="">全部班级</option>' + allClasses.map(c => '<option value="' + c.id + '">' + esc(c.name) + (c.grade ? ' (' + esc(c.grade) + ')' : '') + '</option>').join('');
-}
-
-function loadClassesForAdmin() {
-    const adminId = document.getElementById('studentAdmin').value;
-    const sel = document.getElementById('studentClass');
-    if (!adminId) { sel.innerHTML = '<option value="">选择班级</option>'; return; }
-    const filtered = allClasses.filter(c => c.user_id == adminId);
-    sel.innerHTML = '<option value="">选择班级</option>' + filtered.map(c => '<option value="' + c.id + '">' + esc(c.name) + (c.grade ? ' (' + esc(c.grade) + ')' : '') + '</option>').join('');
-}
-
-function filterUsers() {
-    const q = document.getElementById('userSearch').value.toLowerCase();
-    renderUsersTable(allUsers.filter(u => u.username.toLowerCase().includes(q) || u.name.toLowerCase().includes(q)));
-}
-
-function filterStudents() {
-    const q = document.getElementById('studentSearch').value.toLowerCase();
-    const adminId = document.getElementById('filterAdmin').value;
-    const classId = document.getElementById('filterClass').value;
-    let f = allStudents;
-    if (q) f = f.filter(s => s.name.toLowerCase().includes(q) || (s.student_id || '').toLowerCase().includes(q));
-    if (adminId) f = f.filter(s => s.user_id == adminId);
-    if (classId) f = f.filter(s => s.class_id == classId);
-    renderStudentsTable(f);
-}
-
-function openUserModal(userId) {
-    const modal = document.getElementById('userModal');
-    document.getElementById('editUserId').value = '';
-    document.getElementById('userUsername').value = '';
-    document.getElementById('userName').value = '';
-    document.getElementById('userPassword').value = '';
-    document.getElementById('userRole').value = 'teacher';
-    document.getElementById('userPasswordGroup').style.display = 'block';
-
-    if (userId) {
-        document.getElementById('userModalTitle').textContent = '编辑管理员';
-        document.getElementById('userPasswordGroup').style.display = 'none';
-        const user = allUsers.find(u => u.id === userId);
-        if (user) {
-            document.getElementById('editUserId').value = user.id;
-            document.getElementById('userUsername').value = user.username;
-            document.getElementById('userName').value = user.name;
-            document.getElementById('userRole').value = user.role;
-        }
-    } else {
-        document.getElementById('userModalTitle').textContent = '添加管理员';
-    }
-    modal.classList.add('show');
-}
-
-function closeUserModal() { document.getElementById('userModal').classList.remove('show'); }
-
-async function saveUser() {
-    const editId = document.getElementById('editUserId').value;
-    const username = document.getElementById('userUsername').value.trim();
-    const name = document.getElementById('userName').value.trim();
-    const password = document.getElementById('userPassword').value;
-    const role = document.getElementById('userRole').value;
-
-    if (!username || !name) { showToast('请填写所有字段', 'error'); return; }
-
-    let url, body;
-    if (editId) {
-        url = '/api/super_admin/edit_user/' + editId;
-        body = { username, name, role };
-    } else {
-        if (!password || password.length < 6) { showToast('密码至少6位字符', 'error'); return; }
-        url = '/api/super_admin/add_user';
-        body = { username, name, password, role };
-    }
-
-    try {
-        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        const data = await res.json();
-        if (data.success) { showToast(data.message, 'success'); closeUserModal(); await loadAllData(); }
-        else { showToast(data.message || '操作失败', 'error'); }
-    } catch (e) { showToast('网络错误', 'error'); }
-}
-
-async function deleteUser(userId, username) {
-    if (!confirm('确定要删除 "' + username + '" 及其所有关联数据吗？')) return;
-    try {
-        const res = await fetch('/api/super_admin/delete_user/' + userId, { method: 'POST' });
-        const data = await res.json();
-        if (data.success) { showToast(data.message, 'success'); await loadAllData(); }
-        else { showToast(data.message || '删除失败', 'error'); }
-    } catch (e) { showToast('网络错误', 'error'); }
-}
-
-function openResetPwdModal(userId, username) {
-    document.getElementById('resetPwdUserId').value = userId;
-    document.getElementById('resetPwdUser').textContent = '重置用户 "' + username + '" 的密码';
-    document.getElementById('resetPwdInput').value = '';
-    document.getElementById('resetPwdModal').classList.add('show');
-}
-
-function closeResetPwdModal() { document.getElementById('resetPwdModal').classList.remove('show'); }
-
-async function confirmResetPassword() {
-    const userId = document.getElementById('resetPwdUserId').value;
-    const password = document.getElementById('resetPwdInput').value;
-    if (password.length < 6) { showToast('密码至少6位字符', 'error'); return; }
-    try {
-        const res = await fetch('/api/super_admin/reset_user_password/' + userId, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password })
-        });
-        const data = await res.json();
-        if (data.success) { showToast(data.message, 'success'); closeResetPwdModal(); }
-        else { showToast(data.message || '操作失败', 'error'); }
-    } catch (e) { showToast('网络错误', 'error'); }
-}
-
-function openStudentModal(studentId) {
-    if (!allUsers.length || !allClasses.length) { loadAllData().then(() => openStudentModal(studentId)); return; }
-    populateAdminFilters();
-    document.getElementById('editStudentId').value = '';
-    document.getElementById('studentName').value = '';
-    document.getElementById('studentStudentId').value = '';
-    document.getElementById('studentAdmin').value = '';
-    document.getElementById('studentClass').innerHTML = '<option value="">选择班级</option>';
-
-    if (studentId) {
-        document.getElementById('studentModalTitle').textContent = '编辑学生';
-        const student = allStudents.find(s => s.id === studentId);
-        if (student) {
-            document.getElementById('editStudentId').value = student.id;
-            document.getElementById('studentName').value = student.name;
-            document.getElementById('studentStudentId').value = student.student_id;
-            document.getElementById('studentAdmin').value = student.user_id;
-            loadClassesForAdmin();
-            setTimeout(() => { document.getElementById('studentClass').value = student.class_id; }, 150);
-        }
-    } else {
-        document.getElementById('studentModalTitle').textContent = '添加学生';
-    }
-    document.getElementById('studentModal').classList.add('show');
-}
-
-function closeStudentModal() { document.getElementById('studentModal').classList.remove('show'); }
-
-async function saveStudent() {
-    const editId = document.getElementById('editStudentId').value;
-    const name = document.getElementById('studentName').value.trim();
-    const studentId = document.getElementById('studentStudentId').value.trim();
-    const classId = document.getElementById('studentClass').value;
-    const userId = document.getElementById('studentAdmin').value;
-
-    if (!name || !studentId || !classId || !userId) { showToast('请填写所有字段', 'error'); return; }
-
-    let url;
-    const body = { name, student_id: studentId, class_id: parseInt(classId), user_id: parseInt(userId) };
-    if (editId) { url = '/api/super_admin/edit_student/' + editId; }
-    else { url = '/api/super_admin/add_student'; }
-
-    try {
-        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        const data = await res.json();
-        if (data.success) { showToast(data.message, 'success'); closeStudentModal(); await loadAllData(); }
-        else { showToast(data.message || '操作失败', 'error'); }
-    } catch (e) { showToast('网络错误', 'error'); }
-}
-
-async function deleteStudent(studentId, name) {
-    if (!confirm('确定要删除学生 "' + name + '" 吗？')) return;
-    try {
-        const res = await fetch('/api/super_admin/delete_student/' + studentId, { method: 'POST' });
-        const data = await res.json();
-        if (data.success) { showToast(data.message, 'success'); await loadAllData(); }
-        else { showToast(data.message || '删除失败', 'error'); }
-    } catch (e) { showToast('网络错误', 'error'); }
-}
-
-function esc(s) {
-    if (!s) return '';
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
-}
-
-loadAllData();
-
-['userModal','resetPwdModal','studentModal'].forEach(id => {
-    document.getElementById(id).addEventListener('click', function(e) {
-        if (e.target === this) this.classList.remove('show');
-    });
-});
-</script>
-{% endblock %}
+</body>
+</html>
