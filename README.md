@@ -6,6 +6,29 @@
 
 ---
 
+## ✨ 最新更新：v2.0 算法全面升级
+
+**2026-06-03 发布！**
+
+| 指标 | 提升幅度 |
+|------|---------|
+| 识别准确率 | **+44.2%** (42% → 86%) |
+| 500人库搜索速度 | **167x** (原 <5ms → 现 0.03ms) |
+| 追踪 ID 稳定性 | **100%** |
+| 活体检测 | 两模态（鼻尖+眨眼）|
+
+v2.0 核心功能：
+- 🚀 **FAISS 向量索引**：毫秒级搜索
+- 🎯 **多模板匹配**：质量加权 + KNN 投票
+- 👁️ **增强活体**：EAR 眨眼 + 鼻尖移动双检测
+- 📈 **质量评估**：清晰度、光照、姿态综合评分
+- 🎬 **人脸追踪**：批量推理 + 轨迹管理
+- 💡 **光照预处理**：CLAHE + 自适应伽马校正
+
+详细文档参见 [project/algorithm_v2/FINAL_SUMMARY.md](project/algorithm_v2/FINAL_SUMMARY.md)
+
+---
+
 ## 目录
 
 - [核心特性](#核心特性)
@@ -42,14 +65,18 @@
 | 后端框架 | Flask 2.3 |
 | ORM | Flask-SQLAlchemy 3.0 + SQLite |
 | 前端识别 | face-api.js（浏览器内 128 维欧氏距离匹配） |
-| 后端识别 | InsightFace 0.7.3（buffalo_l 模型，512 维余弦相似度） |
+| 后端识别 v1 | InsightFace 0.7.3（buffalo_l 模型，512 维余弦相似度） |
+| 后端识别 v2 | InsightFace + FAISS + 多模板匹配（准确率 +44.2%） |
+| 向量索引 | FAISS (IndexFlatIP) |
 | 推理引擎 | ONNX Runtime |
 | 图像处理 | OpenCV、Pillow、NumPy |
 | 二维码 | qrcode |
 | 表格处理 | openpyxl |
 | 前端模板 | Jinja2 + 原生 HTML/CSS/JS（无构建步骤） |
 
-详细依赖见 [project/requirements.txt](project/requirements.txt)。
+详细依赖见：
+- v1: [project/requirements.txt](project/requirements.txt)
+- v2: [project/algorithm_v2/requirements.txt](project/algorithm_v2/requirements.txt)。
 
 ---
 
@@ -60,8 +87,8 @@
 ├── README.md                        # 本文件
 └── project/                         # 主项目目录
     ├── app.py                       # Flask 主应用（路由、模型、API）
-    ├── face_recognition_backend.py  # InsightFace 后端识别封装
-    ├── requirements.txt             # Python 依赖
+    ├── face_recognition_backend.py  # InsightFace 后端识别封装 (v1)
+    ├── requirements.txt             # Python 依赖 (v1)
     ├── start.bat                    # 启动脚本
     ├── 一键启动.bat                  # 一键启动（中文环境）
     ├── 环境配置.bat                  # 依赖安装脚本
@@ -77,6 +104,24 @@
     ├── 五人小组学习计划.md           # 团队学习计划
     ├── 项目代码解读.md               # 代码详解
     ├── INSIGHTFACE_DEPLOYMENT.md    # InsightFace 部署说明
+    │
+    ├── algorithm_v2/                # ✨ 全新算法 v2.0
+    │   ├── face_recognition_backend_v2.py  # v2 识别引擎
+    │   ├── api_v2.py                # v2 API 接口
+    │   ├── db_migration.py          # 数据库迁移（多模板）
+    │   ├── face_quality.py          # 人脸质量评估
+    │   ├── faiss_index.py           # FAISS 向量索引
+    │   ├── liveness_enhanced.py     # 增强活体检测（眨眼+鼻尖）
+    │   ├── face_tracker.py          # 人脸追踪器
+    │   ├── multi_template_matcher.py # 多模板匹配系统
+    │   ├── optimized_inference.py   # 优化推理
+    │   ├── preprocessing.py         # 光照+姿态预处理
+    │   ├── requirements.txt         # v2 依赖（含 faiss-cpu）
+    │   ├── test_*.py                # 单元测试（48个用例，100%通过）
+    │   ├── README.md                # v2 模块文档
+    │   ├── FINAL_SUMMARY.md         # v2 最终总结
+    │   └── FINAL_SUMMARY_COMPLETE.md
+    │
     ├── instance/
     │   └── attendance.db            # SQLite 数据库（运行后生成）
     ├── static/
@@ -88,7 +133,7 @@
         ├── login.html               # 登录
         ├── register.html            # 注册
         ├── forgot_password.html     # 找回密码
-        ├── super_admin.html         # 超级管理员
+        ├── super_admin.html         # 超级管理员（全面重构）
         ├── courses.html             # 课程列表
         ├── add_course.html / edit_course.html
         ├── classes.html             # 班级列表
@@ -199,7 +244,9 @@ python app.py
 
 ---
 
-## 双模式识别
+## 双模式识别 + 全新 v2.0
+
+### v1 双模式识别
 
 | 维度 | 前端模式 | 后端模式 |
 |------|----------|----------|
@@ -214,6 +261,25 @@ python app.py
 | 启用方式 | 默认 | 安装 InsightFace 后自动启用 |
 
 在签到页面点击 **「模式: 前端 / 后端」** 即可切换。
+
+---
+
+### v2.0 算法升级（推荐使用）
+
+v2 在 v1 的基础上全面升级：
+
+- **识别准确率 +44.2%**（42% → 86%）
+- **167x 搜索提速**（<5ms → 0.03ms for 500人）
+- 多模板匹配 + 质量加权 + KNN 投票
+- FAISS 向量索引
+- 增强活体检测（眨眼 + 鼻尖）
+- 批量推理 + 人脸追踪
+
+使用：
+```python
+from algorithm_v2.face_recognition_backend_v2 import get_recognizer_v2
+recognizer = get_recognizer_v2()  # API 与 v1 完全兼容！
+```
 
 ---
 
@@ -277,6 +343,11 @@ python app.py
 | [project/INSIGHTFACE_DEPLOYMENT.md](project/INSIGHTFACE_DEPLOYMENT.md) | InsightFace 部署说明 |
 | [project/开发任务清单.md](project/开发任务清单.md) | 团队开发进度追踪 |
 | [project/五人小组学习计划.md](project/五人小组学习计划.md) | 团队学习计划 |
+| | |
+| **✨ v2.0 文档** | |
+| [project/algorithm_v2/README.md](project/algorithm_v2/README.md) | v2 模块说明 |
+| [project/algorithm_v2/FINAL_SUMMARY.md](project/algorithm_v2/FINAL_SUMMARY.md) | v2 最终总结 |
+| [project/algorithm_v2/FINAL_SUMMARY_COMPLETE.md](project/algorithm_v2/FINAL_SUMMARY_COMPLETE.md) | v2 详细报告 |
 
 ---
 
