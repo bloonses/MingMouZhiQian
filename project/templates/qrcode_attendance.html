@@ -44,6 +44,28 @@
             font-size: 16px;
         }
 
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            color: #00ff88;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            margin-bottom: 20px;
+        }
+
+        .back-btn:hover {
+            background: rgba(0, 255, 136, 0.2);
+            transform: translateX(-4px);
+            box-shadow: 0 4px 12px rgba(0, 255, 136, 0.2);
+        }
+
         .main-content {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -412,6 +434,8 @@
 </head>
 <body>
     <div class="container">
+        <a href="/" class="back-btn">← 返回主页面</a>
+        
         <div class="header">
             <h1>📱 二维码签到</h1>
             <p>学生扫码完成签到，作为人脸识别的备用方案</p>
