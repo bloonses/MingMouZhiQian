@@ -656,12 +656,10 @@ def save_face():
             return jsonify({'success': False, 'message': '请重新登录'})
         
         data = request.json
-        if not data or 'student_id' not in data or 'descriptor' not in data:
+        if not data or 'student_id' not in data:
             return jsonify({'success': False, 'message': '缺少必要参数'})
         
         student_id = data['student_id']
-        descriptor = np.array(data['descriptor'], dtype=np.float32)
-        descriptor = descriptor / (np.linalg.norm(descriptor) + 1e-8)
         image_b64 = data.get('image')
         
         student = Student.query.filter_by(id=student_id, user_id=user.id).first()
@@ -669,12 +667,24 @@ def save_face():
         if not student:
             return jsonify({'success': False, 'message': '学生不存在'})
         
-        student.face_descriptor = descriptor.tobytes()
+        # 如果有前端提取的 128 维特征，保存
+        if 'descriptor' in data:
+            descriptor = np.array(data['descriptor'], dtype=np.float32)
+            descriptor = descriptor / (np.linalg.norm(descriptor) + 1e-8)
+            student.face_descriptor = descriptor.tobytes()
         
-        # 同时采集 512 维特征（InsightFace）
+        # 使用 v2 识别器提取和保存特征，以及注册多模板
         if image_b64:
             try:
                 recognizer = get_recognizer()
+                
+                # 注册人脸模板到 v2 的 multi-matcher
+                register_result = recognizer.register_template(
+                    student_id=str(student_id),
+                    img_b64=image_b64
+                )
+                
+                # 同时保存 512 维特征到数据库
                 if recognizer.use_real_models:
                     img = recognizer.base64_to_numpy(image_b64)
                     faces = recognizer.detect_faces(img)
@@ -682,23 +692,43 @@ def save_face():
                         descriptor_512 = faces[0].get('embedding')
                         if descriptor_512 is not None:
                             student.face_descriptor_512 = descriptor_512.astype(np.float32).tobytes()
-                            print(f'[SaveFace] 512 维特征已保存: {len(descriptor_512)} 维')
+                            print(f'[SaveFace_V2] 512 维特征已保存: {len(descriptor_512)} 维')
                         else:
-                            print('[SaveFace] 警告: 未提取到 512 维特征')
+                            print('[SaveFace_V2] 警告: 未提取到 512 维特征')
                     else:
-                        print('[SaveFace] 警告: 未检测到人脸，512 维特征未保存')
+                        print('[SaveFace_V2] 警告: 未检测到人脸，512 维特征未保存')
                 else:
-                    print('[SaveFace] InsightFace 未启用，跳过 512 维特征采集')
+                    print('[SaveFace_V2] InsightFace 未启用，跳过 512 维特征采集')
             except Exception as e:
-                print(f'[SaveFace] 512 维特征采集失败: {e}')
+                print(f'[SaveFace_V2] 特征采集失败: {e}')
         
         db.session.commit()
         has_512 = student.face_descriptor_512 is not None
-        msg = '人脸采集成功（128维+512维双特征）' if has_512 else '人脸采集成功（仅128维，后端识别不可用）'
-        print(f'[SaveFace] {msg}')
-        return jsonify({'success': True, 'message': msg, 'has_512': has_512})
+        has_128 = student.face_descriptor is not None
+        
+        msg_parts = []
+        if has_512:
+            msg_parts.append('512维特征')
+        if has_128:
+            msg_parts.append('128维特征')
+        
+        if not msg_parts:
+            msg = '人脸采集完成'
+        else:
+            msg = f'人脸采集成功（{"+".join(msg_parts)}）'
+        
+        print(f'[SaveFace_V2] {msg}')
+        return jsonify({
+            'success': True, 
+            'message': msg, 
+            'has_512': has_512,
+            'has_128': has_128
+        })
     except Exception as e:
         db.session.rollback()
+        print(f'[SaveFace_V2] 错误: {e}')
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'message': '人脸采集失败'})
 
 @app.route('/attendance')
@@ -983,7 +1013,21 @@ def clear_today_attendance_by_course(course_id):
     
     return jsonify({'success': True, 'message': '课程今日签到数据已清除'})
 
-from face_recognition_backend import get_recognizer, get_liveness_tracker, get_liveness_pool
+# 导入 V2 算法模块 - 使用 v2 版本
+from algorithm_v2.face_recognition_backend_v2 import get_recognizer_v2 as get_recognizer
+from algorithm_v2.liveness_enhanced import get_liveness_pool
+
+# 向后兼容的 liveness tracker（直接从 v2 pool 获取）
+def get_liveness_tracker():
+    return get_liveness_pool().get_or_create(0)
+
+# 导入 V2 API 模块
+try:
+    from algorithm_v2.api_v2 import register_v2_routes
+    V2_API_AVAILABLE = True
+except ImportError as e:
+    print(f'[WARN] V2 API 模块导入失败: {e}')
+    V2_API_AVAILABLE = False
 
 
 @app.route('/api/recognize_face', methods=['POST'])
@@ -1079,55 +1123,62 @@ def recognize_frame():
     class_id = data.get('class_id')
     course_id = data.get('course_id')
     image_b64 = data.get('image')
+    use_tracking = data.get('use_tracking', True)
     
     if not image_b64:
         return jsonify({'success': False, 'message': '缺少图像数据'})
     
-    # 加载班级学生特征库（后端模式使用 512 维）
+    # 加载班级学生特征库（使用字符串键的字典供 v2 识别使用）
     students = Student.query.filter_by(class_id=class_id, user_id=user.id).all()
     students_dict = {
-        s.id: s.face_descriptor_512
+        str(s.id): s.face_descriptor_512
         for s in students if s.face_descriptor_512
     }
     
     if not students_dict:
         return jsonify({'success': False, 'message': '班级无已录入人脸的学生（需重新采集人脸以启用后端识别）'})
     
-    # 后端识别
+    # 后端识别 - 使用 v2 版本
     recognizer = get_recognizer()
-    result = recognizer.recognize(image_b64, students_dict)
-    recognized = result['recognized']
-    face_count = result['detected_faces']
-    liveness_ok = result.get('liveness', False)
-    nose_frames = result.get('nose_frames', 0)
+    if use_tracking:
+        result = recognizer.recognize_with_tracking(image_b64, students_dict)
+    else:
+        result = recognizer.recognize_v2(image_b64, students_dict)
     
-    print(f'[RecognizeFrame] 检测到 {face_count} 张人脸, 匹配 {len(recognized)} 人, 活体={liveness_ok} ({nose_frames}帧)')
+    recognized = result.get('recognized', [])
+    face_count = result.get('detected_faces', 0)
+    liveness_ok = result.get('liveness', False)
+    
+    print(f'[RecognizeFrame_V2] 检测到 {face_count} 张人脸, 匹配 {len(recognized)} 人, 活体={liveness_ok}')
     
     if len(recognized) == 0:
-        if face_count > 0 and not liveness_ok:
-            msg = f'请轻微移动头部（已采集 {nose_frames} 帧，需 6 帧）' if nose_frames > 0 else '请正对摄像头并轻微移动头部'
-        else:
-            msg = '未检测到人脸，请正对摄像头' if face_count == 0 else f'检测到 {face_count} 张人脸，但未匹配到学生'
+        msg = '未检测到人脸，请正对摄像头' if face_count == 0 else f'检测到 {face_count} 张人脸，但未匹配到学生'
         return jsonify({
             'success': False,
             'message': msg,
             'face_count': face_count,
             'liveness': liveness_ok,
-            'nose_frames': nose_frames,
             'matched': []
         })
     
     # 处理所有匹配的人脸
     results = []
     for match in recognized:
-        matched_student = Student.query.filter_by(id=match['student_id'], user_id=user.id).first()
+        # 获取学生 ID（兼容两种格式：字符串或直接整数）
+        student_id_str = match.get('student_id')
+        try:
+            student_id = int(student_id_str)
+        except (ValueError, TypeError):
+            student_id = student_id_str
+        
+        matched_student = Student.query.filter_by(id=student_id, user_id=user.id).first()
         if not matched_student:
             results.append({
-                'student_id': match['student_id'],
+                'student_id': student_id,
                 'student_name': 'Unknown',
                 'checked_in': False,
                 'message': 'Student not found',
-                'bbox': match['bbox'],
+                'bbox': match.get('bbox'),
                 'liveness': match.get('liveness', False)
             })
             continue
@@ -1147,8 +1198,8 @@ def recognize_frame():
                 'student_name': matched_student.name,
                 'checked_in': False,
                 'already_attended': True,
-                'message': f'{matched_student.name} already checked in today',
-                'bbox': match['bbox'],
+                'message': f'{matched_student.name} 今日已签到',
+                'bbox': match.get('bbox'),
                 'liveness': is_live
             })
             continue
@@ -1158,10 +1209,9 @@ def recognize_frame():
                 'student_id': matched_student.id,
                 'student_name': matched_student.name,
                 'checked_in': False,
-                'message': f'{matched_student.name} matched but liveness not verified',
-                'bbox': match['bbox'],
-                'liveness': False,
-                'nose_frames': match.get('nose_frames', 0)
+                'message': f'{matched_student.name} 活体检测未通过',
+                'bbox': match.get('bbox'),
+                'liveness': False
             })
             continue
         
@@ -1169,38 +1219,59 @@ def recognize_frame():
             student_id=matched_student.id,
             class_id=class_id,
             course_id=course_id,
-            method='face_backend',
+            method='face_v2',
             user_id=user.id
         )
         db.session.add(attendance)
         db.session.commit()
         
+        # 标记该学生已签到（如果启用追踪）
+        if use_tracking:
+            recognizer.mark_attendance(str(matched_student.id))
+        
         results.append({
             'student_id': matched_student.id,
             'student_name': matched_student.name,
             'checked_in': True,
-            'message': f'{matched_student.name} checked in successfully',
-            'bbox': match['bbox'],
+            'message': f'{matched_student.name} 签到成功',
+            'bbox': match.get('bbox'),
             'liveness': True,
-            'nose_frames': match.get('nose_frames', 0)
+            'confidence': match.get('confidence', 0.0)
         })
     
-    return jsonify({
+    # 构建完整响应（包含追踪信息）
+    response = {
         'success': True,
         'results': results,
         'face_count': face_count,
         'liveness': liveness_ok,
-        'nose_frames': nose_frames,
-        'matched': [{'student_id': m['student_id'], 'bbox': m['bbox']} for m in recognized]
-    })
+        'matched': [{'student_id': m.get('student_id'), 'bbox': m.get('bbox')} for m in recognized]
+    }
+    
+    # 添加追踪信息（如果有）
+    if use_tracking and 'tracked_faces' in result:
+        response['tracked_faces'] = result['tracked_faces']
+        response['tracker_stats'] = result.get('tracker_stats', {})
+    
+    return jsonify(response)
 
 @app.route('/api/reset_liveness', methods=['POST'])
 def reset_liveness():
     if 'user_id' not in session:
         return jsonify({'success': False, 'error': '未登录'})
-    get_liveness_tracker().reset()
+    
+    # 重置 v2 的活体检测器池
     get_liveness_pool().reset()
-    print('[Liveness] 活体追踪器已重置')
+    
+    # 同时重置识别器的追踪器（如果有）
+    try:
+        recognizer = get_recognizer()
+        if hasattr(recognizer, 'reset_tracker'):
+            recognizer.reset_tracker()
+    except Exception as e:
+        print(f'[Liveness] 重置追踪器失败: {e}')
+    
+    print('[Liveness_V2] 活体追踪器已重置')
     return jsonify({'success': True})
 
 @app.route('/api/checkin_manual', methods=['POST'])
@@ -2093,6 +2164,15 @@ def super_admin_delete_student(student_id):
     db.session.commit()
     
     return jsonify({'success': True, 'message': 'Student deleted'})
+
+# ============================================================
+# V2 API 路由注册
+# ============================================================
+if V2_API_AVAILABLE:
+    register_v2_routes(app)
+    print('[APP] V2 API 已注册')
+else:
+    print('[APP] V2 API 不可用，仅提供基础功能')
 
 if __name__ == '__main__':
     debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
