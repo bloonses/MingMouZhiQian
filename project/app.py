@@ -1,5 +1,7 @@
 import os
 import re
+import secrets
+import hashlib
 from datetime import datetime, date, timedelta
 from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, send_file, session
 from flask_sqlalchemy import SQLAlchemy
@@ -11,12 +13,44 @@ from openpyxl import Workbook
 from io import BytesIO
 import base64
 import qrcode
+import logging
+from logging.handlers import RotatingFileHandler
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'face-attendance-secret-key-change-me')
+
+# 安全的密钥生成
+def generate_secure_secret_key():
+    """生成安全的密钥"""
+    return secrets.token_urlsafe(32)
+
+# 配置安全的会话密钥
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', generate_secure_secret_key())
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=2)  # 会话2小时后过期
+app.config['SESSION_COOKIE_SECURE'] = True  # 仅HTTPS传输
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # 防止JavaScript访问
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF保护
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///attendance.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 限制上传大小
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['ALLOWED_EXTENSIONS'] = {'xlsx', 'xls'}
+
+# 配置日志
+def setup_logging():
+    """配置安全的日志记录"""
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+
+    # 错误日志
+    handler = RotatingFileHandler('logs/error.log', maxBytes=10000, backupCount=1)
+    handler.setLevel(logging.ERROR)
+    formatter = logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s')
+    handler.setFormatter(formatter)
+    app.logger.addHandler(handler)
+
+    # 移除默认的print输出
+
+setup_logging()
 
 db = SQLAlchemy(app)
 
@@ -93,54 +127,90 @@ course_class = db.Table('course_class',
     db.Column('class_id', db.Integer, db.ForeignKey('class.id'), primary_key=True)
 )
 
-def login_required(f):
+def csrf_protected(f):
+    """CSRF保护装饰器"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if request.method == 'POST':
+            token = session.get('csrf_token')
+            if not token or request.form.get('csrf_token') != token:
+                return jsonify({'success': False, 'error': 'CSRF验证失败'}), 400
+        return f(*args, **kwargs)
+    return decorated_function
+
+def require_login(f):
+    """登录验证装饰器"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
+            if request.is_ajax():
+                return jsonify({'success': False, 'error': '未登录'})
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
 
 def get_current_user():
+    """获取当前用户"""
     if 'user_id' in session:
         return User.query.get(session['user_id'])
     return None
 
+# 初始化CSRF令牌
+@app.before_request
+def generate_csrf_token():
+    """为每个请求生成CSRF令牌"""
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_urlsafe(32)
+
+# 导入 V2 算法模块 - 使用 v2 版本
+
 with app.app_context():
     db.create_all()
-    
-    # 数据库迁移：为已有数据库添加 face_descriptor_512 列
-    from sqlalchemy import inspect, text
-    inspector = inspect(db.engine)
-    columns = [c['name'] for c in inspector.get_columns('student')]
-    if 'face_descriptor_512' not in columns:
-        with db.engine.connect() as conn:
-            conn.execute(text('ALTER TABLE student ADD COLUMN face_descriptor_512 BLOB'))
-            conn.commit()
-        print('[DB] 已添加 face_descriptor_512 列')
-    
-    # 数据库迁移：为已有数据库添加安全问题和答案列
-    user_columns = [c['name'] for c in inspector.get_columns('user')]
-    if 'security_question' not in user_columns:
-        with db.engine.connect() as conn:
-            conn.execute(text('ALTER TABLE "user" ADD COLUMN security_question VARCHAR(200) DEFAULT \'\''))
-            conn.commit()
-        print('[DB] 已添加 security_question 列')
-    if 'security_answer_hash' not in user_columns:
-        with db.engine.connect() as conn:
-            conn.execute(text('ALTER TABLE "user" ADD COLUMN security_answer_hash VARCHAR(256) DEFAULT \'\''))
-            conn.commit()
-        print('[DB] 已添加 security_answer_hash 列')
-    
-    if not User.query.filter_by(username='admin').first():
-        admin = User(
-            username='admin',
-            password_hash=generate_password_hash('admin123'),
-            name='管理员',
-            role='super_admin'
-        )
-        db.session.add(admin)
-        db.session.commit()
+
+    # 安全的数据库迁移
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
+
+        # 检查并添加 face_descriptor_512 列
+        columns = [c['name'] for c in inspector.get_columns('student')]
+        if 'face_descriptor_512' not in columns:
+            with db.engine.connect() as conn:
+                conn.execute(text('ALTER TABLE student ADD COLUMN face_descriptor_512 BLOB'))
+                conn.commit()
+            print('[DB] 已添加 face_descriptor_512 列')
+
+        # 检查并添加安全问题和答案列
+        user_columns = [c['name'] for c in inspector.get_columns('user')]
+        if 'security_question' not in user_columns:
+            with db.engine.connect() as conn:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN security_question VARCHAR(200) DEFAULT \'\''))
+                conn.commit()
+            print('[DB] 已添加 security_question 列')
+        if 'security_answer_hash' not in user_columns:
+            with db.engine.connect() as conn:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN security_answer_hash VARCHAR(256) DEFAULT \'\''))
+                conn.commit()
+            print('[DB] 已添加 security_answer_hash 列')
+
+        # 安全的默认管理员创建（仅在无管理员时创建）
+        if not User.query.filter_by(username='admin').first():
+            print('[SECURITY] 创建默认管理员账号')
+            admin = User(
+                username='admin',
+                password_hash=generate_password_hash('Admin@12345'),  # 强密码
+                name='管理员',
+                role='super_admin'
+            )
+            db.session.add(admin)
+            db.session.commit()
+            print('[SECURITY] 默认管理员账号已创建 (用户名: admin, 密码: Admin@12345)')
+        else:
+            print('[SECURITY] 默认管理员账号已存在')
+
+    except Exception as e:
+        print(f'[DB MIGRATION ERROR] {e}')
+        app.logger.error(f'Database migration failed: {e}')
 
 @app.route('/')
 def index():
@@ -191,27 +261,43 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username', '').strip()
+        username = sanitize_input(request.form.get('username', ''))
         password = request.form.get('password', '')
-        
+
+        # 输入验证
         if not username or not password:
-            return render_template('login.html', error='请输入用户名和密码')
-        
+            return render_template('login.html',
+                                 error='请输入用户名和密码',
+                                 csrf_token=session['csrf_token'])
+
+        # 检查用户是否存在
         user = User.query.filter_by(username=username).first()
-        
+
+        # 验证用户和密码
         if user and check_password_hash(user.password_hash, password):
+            # 清除旧会话
             session.clear()
+            # 创建安全的会话
             session['user_id'] = user.id
             session['username'] = user.username
             session['name'] = user.name
             session['role'] = user.role
+            session['last_activity'] = datetime.now()
+
+            # 记录登录日志
+            app.logger.info(f'User {username} logged in successfully')
+
             if user.role == 'super_admin':
                 return redirect(url_for('super_admin_dashboard'))
             return redirect(url_for('index'))
         else:
-            return render_template('login.html', error='用户名或密码错误')
-    
-    return render_template('login.html')
+            # 记录失败登录尝试
+            app.logger.warning(f'Failed login attempt for username: {username}')
+            return render_template('login.html',
+                                 error='用户名或密码错误',
+                                 csrf_token=session['csrf_token'])
+
+    return render_template('login.html', csrf_token=session['csrf_token'])
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -1013,7 +1099,46 @@ def clear_today_attendance_by_course(course_id):
     
     return jsonify({'success': True, 'message': '课程今日签到数据已清除'})
 
-# 导入 V2 算法模块 - 使用 v2 版本
+def is_safe_username(username):
+    """验证用户名安全性"""
+    if len(username) < 3 or len(username) > 20:
+        return False
+    # 只允许字母、数字、下划线和中文
+    if not re.match(r'^[a-zA-Z0-9_一-龥]{3,20}$', username):
+        return False
+    # 检查常见弱用户名
+    weak_usernames = ['admin', 'administrator', 'root', 'test', 'user', 'guest']
+    if username.lower() in weak_usernames:
+        return False
+    return True
+
+def is_strong_password(password):
+    """验证密码强度"""
+    if len(password) < 8:
+        return False
+    if len(password) > 100:
+        return False
+    # 检查至少包含一个大写字母、一个小写字母、一个数字
+    has_upper = re.search(r'[A-Z]', password)
+    has_lower = re.search(r'[a-z]', password)
+    has_digit = re.search(r'[0-9]', password)
+    return has_upper and has_lower and has_digit
+
+def allowed_file(filename):
+    """检查文件是否允许上传"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+def sanitize_input(text, max_length=100):
+    """清理输入文本"""
+    if not text:
+        return ''
+    text = str(text).strip()
+    if len(text) > max_length:
+        text = text[:max_length]
+    # 移除潜在的恶意字符
+    text = re.sub(r'[<>\"\'&]', '', text)
+    return text
 from algorithm_v2.face_recognition_backend_v2 import get_recognizer_v2 as get_recognizer
 from algorithm_v2.liveness_enhanced import get_liveness_pool
 
@@ -2175,5 +2300,16 @@ else:
     print('[APP] V2 API 不可用，仅提供基础功能')
 
 if __name__ == '__main__':
+    # 安全配置：在生产环境中禁用 debug 模式
     debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
-    app.run(debug=debug_mode, host='0.0.0.0', port=5000)
+    host = os.environ.get('FLASK_HOST', '127.0.0.1')  # 默认绑定到 localhost
+
+    if os.environ.get('FLASK_ENV') == 'production':
+        debug_mode = False
+        host = '0.0.0.0'  # 生产环境可以绑定到所有接口
+        # 添加 HTTPS 配置（如果有证书）
+        # ssl_context = ('cert.pem', 'key.pem')
+        # app.run(debug=debug_mode, host=host, port=5000, ssl_context=ssl_context)
+    else:
+        # 开发环境使用 HTTP
+        app.run(debug=debug_mode, host=host, port=5000)

@@ -8,10 +8,19 @@ import ssl
 MODEL_DIR = os.path.join(os.path.dirname(__file__), 'models')
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-try:
-    ssl._create_default_https_context = ssl._create_unverified_context
-except Exception:
-    pass
+# 安全的 SSL 配置（仅在开发环境禁用验证）
+def configure_ssl():
+    """配置安全的 SSL 设置"""
+    if os.environ.get('FLASK_ENV') == 'development':
+        try:
+            ssl._create_default_https_context = ssl._create_unverified_context
+        except Exception:
+            pass
+    else:
+        # 生产环境使用默认 SSL 验证
+        pass
+
+configure_ssl()
 
 
 class LivenessTracker:
