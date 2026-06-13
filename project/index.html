@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 style="font-size: 28px; margin-bottom: 24px;">📊 仪表板</h1>
+
+<!-- 云存储状态卡片 -->
+<div class="card" style="margin-bottom: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2>☁️ 云存储状态</h2>
+        {% if cloud_status == "已配置" %}
+        <span class="status-dot online"></span>
+        {% else %}
+        <span class="status-dot offline"></span>
+        {% endif %}
+    </div>
+
+    {% if cloud_status == "已配置" %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px;">
+            <div style="padding: 16px; background: rgba(0, 255, 136, 0.06); border: 1px solid rgba(0, 255, 136, 0.18); border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 800; color: var(--brand); margin-bottom: 4px;">10GB</div>
+                <div style="font-size: 12px; color: var(--text-muted);">存储空间</div>
+            </div>
+            <div style="padding: 16px; background: rgba(0, 255, 136, 0.06); border: 1px solid rgba(0, 255, 136, 0.18); border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 800; color: var(--brand); margin-bottom: 4px;">1GB/天</div>
+                <div style="font-size: 12px; color: var(--text-muted);">下载流量</div>
+            </div>
+            <div style="padding: 16px; background: rgba(0, 255, 136, 0.06); border: 1px solid rgba(0, 255, 136, 0.18); border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 800; color: var(--brand); margin-bottom: 4px;">无限制</div>
+                <div style="font-size: 12px; color: var(--text-muted);">上传流量</div>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-top: 16px;">
+            <a href="/backup/database" class="btn btn-primary" style="text-decoration: none;">
+                💾 备份数据库
+            </a>
+            <a href="/backup/student_faces" class="btn btn-secondary" style="text-decoration: none;">
+                📷 备份人脸数据
+            </a>
+            <a href="/backup/all" class="btn btn-secondary" style="text-decoration: none;">
+                🔄 备份所有数据
+            </a>
+        </div>
+    {% else %}
+        <div style="padding: 16px; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.18); border-radius: 8px;">
+            <div style="font-size: 16px; color: var(--danger); margin-bottom: 8px;">⚠️ 云存储未配置</div>
+            <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">请配置云存储以启用自动备份功能</div>
+            <a href="/cloud/config" class="btn btn-primary" style="text-decoration: none;">
+                🔧 配置云存储
+            </a>
+        </div>
+    {% endif %}
+</div>
+
+<!-- 校园网访问信息卡片 -->
+<div class="card" style="margin-bottom: 24px;">
+    <h2>🌐 校园网访问信息</h2>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px;">
+        <div style="padding: 16px; background: rgba(0, 255, 136, 0.06); border: 1px solid rgba(0, 255, 136, 0.18); border-radius: 8px;">
+            <div style="font-size: 14px; color: var(--text-muted); margin-bottom: 4px;">本地IP地址</div>
+            <div style="font-size: 18px; font-weight: 700; color: var(--text-primary); font-family: 'JetBrains Mono', monospace;">{{ network_info.local_ip }}</div>
+        </div>
+        <div style="padding: 16px; background: rgba(0, 255, 136, 0.06); border: 1px solid rgba(0, 255, 136, 0.18); border-radius: 8px;">
+            <div style="font-size: 14px; color: var(--text-muted); margin-bottom: 4px;">主机名</div>
+            <div style="font-size: 18px; font-weight: 700; color: var(--text-primary); font-family: 'JetBrains Mono', monospace;">{{ network_info.hostname }}</div>
+        </div>
+        <div style="padding: 16px; background: rgba(0, 255, 136, 0.06); border: 1px solid rgba(0, 255, 136, 0.18); border-radius: 8px;">
+            <div style="font-size: 14px; color: var(--text-muted); margin-bottom: 4px;">访问端口</div>
+            <div style="font-size: 18px; font-weight: 700; color: var(--text-primary); font-family: 'JetBrains Mono', monospace;">{{ network_info.port }}</div>
+        </div>
+    </div>
+
+    <div style="margin-bottom: 16px;">
+        <div style="font-size: 14px; color: var(--text-muted); margin-bottom: 8px;">📱 访问地址：</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+            {% for url in network_info.access_urls %}
+            <a href="{{ url }}" class="btn btn-outline" style="text-decoration: none; font-size: 12px; padding: 8px 16px;">
+                {{ url }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div style="text-align: center; padding: 20px; background: rgba(0, 255, 136, 0.03); border: 1px dashed rgba(0, 255, 136, 0.3); border-radius: 8px;">
+        <div style="font-size: 48px; margin-bottom: 12px;">📱</div>
+        <div style="font-size: 16px; color: var(--text-secondary); margin-bottom: 8px;">手机扫码访问</div>
+        <div style="font-size: 14px; color: var(--text-muted);">用户可扫描二维码或直接输入地址访问系统</div>
+    </div>
+</div>
+
+<div class="stats">
+    <div class="stat-card">
+        <div class="value">{{ class_count }}</div>
+        <div class="label">班级数量</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ student_count }}</div>
+        <div class="label">学生总数</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ today_attendance }}</div>
+        <div class="label">今日签到</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ attendance_rate }}%</div>
+        <div class="label">今日出勤率</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>今日签到情况</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>班级</th>
+                <th>应到人数</th>
+                <th>已签到</th>
+                <th>出勤率</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for stat in class_stats %}
+            <tr>
+                <td>{{ stat.name }}</td>
+                <td>{{ stat.total }}</td>
+                <td>{{ stat.attended }}</td>
+                <td>{{ stat.rate }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>快速操作</h2>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+        <a href="/attendance" class="btn btn-primary" style="text-decoration: none; text-align: center;">
+            🎯 开始签到
+        </a>
+        <a href="/students" class="btn btn-secondary" style="text-decoration: none; text-align: center;">
+            👥 添加学生
+        </a>
+        <a href="/classes" class="btn btn-secondary" style="text-decoration: none; text-align: center;">
+            🏫 管理班级
+        </a>
+        <a href="/records" class="btn btn-secondary" style="text-decoration: none; text-align: center;">
+            📝 查看记录
+        </a>
+    </div>
+</div>
+{% endblock %}
