@@ -6,6 +6,45 @@
 
 ---
 
+## ☁️ 最新更新：云存储集成
+
+**2026-06-13 发布！**
+
+明眸智签现在支持**完整的云端备份与恢复**，确保考勤数据和人脸数据安全存储、永不丢失。
+
+### 支持的云服务商
+
+| 服务商 | 免费额度 | 主要文件 |
+|--------|---------|---------|
+| **Backblaze B2**（推荐） | 10GB 永久免费 | `backblaze_b2_storage.py` · `b2_setup_assistant.py` |
+| **AWS S3** | 5GB · 12个月免费 | `cloud_storage.py` · `cloud_config.py` |
+| **Google Cloud Storage** | 5GB · 永久免费 | `cloud_storage.py` · `cloud_config.py` |
+| **Azure Blob Storage** | 5GB · 永久免费 | `cloud_storage.py` · `cloud_config.py` |
+
+### 云存储核心能力
+- 🔄 **数据库自动备份**：`attendance.db` 定时同步到云端
+- 👤 **人脸特征备份**：学生人脸特征向量云端冗余
+- ⬇️ **一键恢复**：从云端恢复到任意设备
+- 🛠️ **配置辅助脚本**：`setup_cloud_storage.py` · `setup_permanent_cloud.py`
+- 🔐 **环境变量管理**：`.env` 文件 + `cloud_config.json` 双配置
+- ✅ **安全修复**：密钥泄露防护、CORS 限制、权限校验
+
+快速上手：
+```bash
+# 1. 一键设置 Backblaze B2
+cd project
+python b2_setup_assistant.py
+
+# 2. 或启动带云存储的应用
+python app_with_cloud.py
+
+# 3. 选择云服务商并填写密钥即可
+```
+
+详细文档参见 [project/README_CLOUD.md](project/README_CLOUD.md)
+
+---
+
 ## ✨ 最新更新：v2.0 算法全面升级
 
 **2026-06-03 发布！**
@@ -72,11 +111,14 @@ v2.0 核心功能：
 | 图像处理 | OpenCV、Pillow、NumPy |
 | 二维码 | qrcode |
 | 表格处理 | openpyxl |
+| 云存储 | Backblaze B2（10GB永久免费）· AWS S3 · GCP Storage · Azure Blob |
+| 配置管理 | `.env` + `cloud_config.json` 双方案 |
+| 集成入口 | `app_with_cloud.py`（完整云存储版）· `cloud_integration.py`（路由层） |
 | 前端模板 | Jinja2 + 原生 HTML/CSS/JS（无构建步骤） |
 
 详细依赖见：
 - v1: [project/requirements.txt](project/requirements.txt)
-- v2: [project/algorithm_v2/requirements.txt](project/algorithm_v2/requirements.txt)。
+- v2: [project/algorithm_v2/requirements.txt](project/algorithm_v2/requirements.txt)
 
 ---
 
@@ -121,6 +163,32 @@ v2.0 核心功能：
     │   ├── README.md                # v2 模块文档
     │   ├── FINAL_SUMMARY.md         # v2 最终总结
     │   └── FINAL_SUMMARY_COMPLETE.md
+    │
+    ├── ☁️ 云存储核心文件（新增）
+    ├── .env                         # 环境变量配置（B2密钥等）
+    ├── app_with_cloud.py           # 集成云存储的主应用入口
+    ├── backblaze_b2_storage.py     # Backblaze B2 管理器（推荐）
+    ├── b2_setup_assistant.py       # B2 一键设置助手
+    ├── app_b2_integration.py       # B2 与主应用集成
+    ├── cloud_storage.py             # 通用云存储管理器（S3/GCP/Azure）
+    ├── cloud_integration.py         # Flask 路由层 + 自动备份
+    ├── cloud_config.py              # 多服务商配置管理
+    ├── setup_cloud_storage.py      # 云存储自动设置脚本
+    ├── setup_permanent_cloud.py    # 永久免费云方案设置
+    ├── permanent_free_storage.py   # 永久免费存储策略
+    ├── demo_cloud_storage.py       # 云存储演示脚本
+    ├── test_b2_connection.py       # B2 连接测试
+    ├── test_quick_b2.py            # B2 快速测试
+    │
+    ├── 📄 云存储相关文档
+    ├── README_CLOUD.md             # 云存储功能完整说明
+    ├── CLOUD_PROVIDER_CHOICE_GUIDE.md # 云服务商选择指南
+    ├── B2_QUICK_SETUP_GUIDE.md     # B2 快速设置指南
+    ├── PERMANENT_CLOUD_GUIDE.md    # 永久免费云配置指南
+    ├── CROSS_COMPUTER_DEPLOYMENT.md # 跨电脑部署指南
+    ├── HOW_TO_FIND_APP_KEY.md      # 如何获取应用密钥
+    ├── CLOUD_INTEGRATION_REPORT.md  # 云集成测试报告
+    ├── SECURITY_FIXES.md           # 安全修复记录
     │
     ├── instance/
     │   └── attendance.db            # SQLite 数据库（运行后生成）
@@ -242,6 +310,15 @@ python app.py
 - bcrypt 密码哈希
 - 每次登录清除旧会话
 
+### 9. 云存储与跨设备同步（新增）
+- **Backblaze B2**：10GB 永久免费，推荐作为首选
+- **AWS S3 / GCP / Azure**：多家云服务商一键切换
+- **数据库自动备份**：考勤数据、用户信息、签到记录
+- **人脸特征云端冗余**：防止本地磁盘故障
+- **一键恢复**：从云端恢复到任意设备，实现多电脑同步
+- **配置脚本**：`b2_setup_assistant.py` · `setup_cloud_storage.py`
+- **安全加固**：密钥仅存于 `.env` 文件、HTTPS 传输、CORS 限制
+
 ---
 
 ## 双模式识别 + 全新 v2.0
@@ -348,6 +425,16 @@ recognizer = get_recognizer_v2()  # API 与 v1 完全兼容！
 | [project/algorithm_v2/README.md](project/algorithm_v2/README.md) | v2 模块说明 |
 | [project/algorithm_v2/FINAL_SUMMARY.md](project/algorithm_v2/FINAL_SUMMARY.md) | v2 最终总结 |
 | [project/algorithm_v2/FINAL_SUMMARY_COMPLETE.md](project/algorithm_v2/FINAL_SUMMARY_COMPLETE.md) | v2 详细报告 |
+| | |
+| **☁️ 云存储文档** | |
+| [project/README_CLOUD.md](project/README_CLOUD.md) | 云存储功能完整说明 |
+| [project/CLOUD_PROVIDER_CHOICE_GUIDE.md](project/CLOUD_PROVIDER_CHOICE_GUIDE.md) | 云服务商选择指南 |
+| [project/B2_QUICK_SETUP_GUIDE.md](project/B2_QUICK_SETUP_GUIDE.md) | B2 快速设置指南 |
+| [project/PERMANENT_CLOUD_GUIDE.md](project/PERMANENT_CLOUD_GUIDE.md) | 永久免费云方案 |
+| [project/CROSS_COMPUTER_DEPLOYMENT.md](project/CROSS_COMPUTER_DEPLOYMENT.md) | 跨电脑部署指南 |
+| [project/HOW_TO_FIND_APP_KEY.md](project/HOW_TO_FIND_APP_KEY.md) | 如何获取 B2 应用密钥 |
+| [project/CLOUD_INTEGRATION_REPORT.md](project/CLOUD_INTEGRATION_REPORT.md) | 云集成测试报告 |
+| [project/SECURITY_FIXES.md](project/SECURITY_FIXES.md) | 安全修复记录 |
 
 ---
 
