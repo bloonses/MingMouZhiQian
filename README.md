@@ -6,6 +6,49 @@
 
 ---
 
+## 🏫 最新更新：校园网部署
+
+**2026-06-13 发布！**
+
+明眸智签现已支持**校园网局域网部署与访问**。同一校园网内的任何设备（手机、平板、电脑）只需打开指定链接即可使用系统，无需单独安装。
+
+### 校园网访问特性
+
+| 特性 | 说明 |
+|------|------|
+| 🌐 局域网访问 | 同一校园网内设备可直接访问 |
+| 📱 二维码访问 | 启动后生成访问二维码，手机扫码即用 |
+| 🔍 自动 IP 检测 | 自动识别本机所有可用 IP 地址 |
+| 🧭 网络诊断 | 启动时自动检测网络状态并输出诊断信息 |
+| 📋 访问日志 | 记录所有访问信息以便追踪 |
+| ☁️ 云存储集成 | 校园网版内置 B2 云存储备份 |
+| 🔐 用户认证 | 保持原有 bcrypt 密码 + 角色权限体系 |
+
+### 三种启动方式
+
+```bash
+# 方式 1：校园网版（推荐用于教室场景）
+cd project
+python start_campus.py       # 一键启动，自动显示 IP 和二维码
+# 或
+python app_campus.py         # 校园网专用 Flask 应用
+
+# 方式 2：云存储版
+python app_with_cloud.py
+
+# 方式 3：标准版
+python app.py
+```
+
+启动时系统会输出：`🌐 访问地址列表` · `📱 二维码` · `📊 网络诊断`
+
+详细说明参见：
+- [project/CAMPUS_NETWORK_GUIDE.md](project/CAMPUS_NETWORK_GUIDE.md)
+- [project/CAMPUS_NETWORK_DEPLOYMENT_REPORT.md](project/CAMPUS_NETWORK_DEPLOYMENT_REPORT.md)
+- [project/CAMPUS_NETWORK_REQUIREMENT.md](project/CAMPUS_NETWORK_REQUIREMENT.md)
+
+---
+
 ## ☁️ 最新更新：云存储集成
 
 **2026-06-13 发布！**
@@ -180,6 +223,15 @@ v2.0 核心功能：
     ├── test_b2_connection.py       # B2 连接测试
     ├── test_quick_b2.py            # B2 快速测试
     │
+    ├── 🏫 校园网部署核心文件（新增）
+    ├── app_campus.py              # 校园网专用 Flask 主应用（含云存储 + 局域网访问）
+    ├── start_campus.py          # 校园网一键启动脚本（自动检测IP + 生成二维码）
+    ├── campus_index.html        # 校园网主页 HTML
+    │
+    ├── 🌐 独立静态页面（项目根目录）
+    ├── base.html                # 独立页面布局（非 templates/）
+    ├── index.html               # 独立静态主页（含云存储状态卡片 + 校园网访问信息）
+    │
     ├── 📄 云存储相关文档
     ├── README_CLOUD.md             # 云存储功能完整说明
     ├── CLOUD_PROVIDER_CHOICE_GUIDE.md # 云服务商选择指南
@@ -189,6 +241,12 @@ v2.0 核心功能：
     ├── HOW_TO_FIND_APP_KEY.md      # 如何获取应用密钥
     ├── CLOUD_INTEGRATION_REPORT.md  # 云集成测试报告
     ├── SECURITY_FIXES.md           # 安全修复记录
+    │
+    ├── 📄 校园网相关文档
+    ├── CAMPUS_NETWORK_GUIDE.md    # 校园网访问部署指南
+    ├── CAMPUS_NETWORK_DEPLOYMENT_REPORT.md # 校园网部署报告
+    ├── CAMPUS_NETWORK_REQUIREMENT.md # 校园网要求清单
+    ├── PAGE_INTEGRATION_REPORT.md   # 独立页面集成报告（HTML 样式说明）
     │
     ├── instance/
     │   └── attendance.db            # SQLite 数据库（运行后生成）
@@ -319,6 +377,14 @@ python app.py
 - **配置脚本**：`b2_setup_assistant.py` · `setup_cloud_storage.py`
 - **安全加固**：密钥仅存于 `.env` 文件、HTTPS 传输、CORS 限制
 
+### 10. 校园网局域网部署（新增）
+- **`app_campus.py`**：校园网专用 Flask 应用，内置云存储 + 局域网访问
+- **`start_campus.py`**：一键启动脚本，自动检测 IP、生成访问二维码、输出网络诊断
+- **多设备访问**：同一校园网内任何电脑 / 手机 / 平板可直接访问
+- **访问日志**：记录所有访问信息
+- **安全不变**：保持原有的 bcrypt 密码 + 角色权限体系
+- **独立静态页面**：`base.html` / `index.html`（项目根目录） — 与 Jinja2 模板分离，适用于直接打开的 HTML 访问方式
+
 ---
 
 ## 双模式识别 + 全新 v2.0
@@ -435,6 +501,12 @@ recognizer = get_recognizer_v2()  # API 与 v1 完全兼容！
 | [project/HOW_TO_FIND_APP_KEY.md](project/HOW_TO_FIND_APP_KEY.md) | 如何获取 B2 应用密钥 |
 | [project/CLOUD_INTEGRATION_REPORT.md](project/CLOUD_INTEGRATION_REPORT.md) | 云集成测试报告 |
 | [project/SECURITY_FIXES.md](project/SECURITY_FIXES.md) | 安全修复记录 |
+| | |
+| **🏫 校园网文档** | |
+| [project/CAMPUS_NETWORK_GUIDE.md](project/CAMPUS_NETWORK_GUIDE.md) | 校园网访问部署指南 |
+| [project/CAMPUS_NETWORK_DEPLOYMENT_REPORT.md](project/CAMPUS_NETWORK_DEPLOYMENT_REPORT.md) | 校园网部署报告 |
+| [project/CAMPUS_NETWORK_REQUIREMENT.md](project/CAMPUS_NETWORK_REQUIREMENT.md) | 校园网要求清单 |
+| [project/PAGE_INTEGRATION_REPORT.md](project/PAGE_INTEGRATION_REPORT.md) | 独立页面集成报告 |
 
 ---
 
