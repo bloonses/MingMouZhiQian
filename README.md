@@ -442,4 +442,4 @@ recognizer = get_recognizer_v2()  # API 与 v1 完全兼容！
 
 本项目由五人小组协作开发，定位为大学课堂场景的轻量级考勤工具。
 
-仓库地址：<https://github.com/bloonses/mingmouzhiqian>
+仓库地址：<https://github.com/bloonses/MingMouZhiQian>
